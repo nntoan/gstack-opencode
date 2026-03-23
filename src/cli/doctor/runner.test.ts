@@ -19,59 +19,84 @@ function createWriter(): MemoryWriter {
   };
 }
 
+function captureExitCode(): () => void {
+  const previousExitCode: number | undefined = process.exitCode;
+  return (): void => {
+    process.exitCode = previousExitCode;
+  };
+}
+
 describe('runDoctor', () => {
   it('runs and returns without crashing', async () => {
-    const stdout = createWriter();
-    const stderr = createWriter();
+    const restoreExitCode: () => void = captureExitCode();
+    try {
+      const stdout = createWriter();
+      const stderr = createWriter();
 
-    const checks: DoctorCheck[] = [
-      { name: 's1', category: 'system', run: async () => ({ status: 'pass', message: 'ok s1' }) },
-      { name: 'c1', category: 'config', run: async () => ({ status: 'pass', message: 'ok c1' }) },
-      { name: 't1', category: 'tools', run: async () => ({ status: 'warn', message: 'warn t1' }) },
-      { name: 'm1', category: 'mcp', run: async () => ({ status: 'pass', message: 'ok m1' }) },
-    ];
+      const checks: DoctorCheck[] = [
+        { name: 's1', category: 'system', run: async () => ({ status: 'pass', message: 'ok s1' }) },
+        { name: 'c1', category: 'config', run: async () => ({ status: 'pass', message: 'ok c1' }) },
+        {
+          name: 't1',
+          category: 'tools',
+          run: async () => ({ status: 'warn', message: 'warn t1' }),
+        },
+        { name: 'm1', category: 'mcp', run: async () => ({ status: 'pass', message: 'ok m1' }) },
+      ];
 
-    await runDoctor({ checks, stdout, stderr });
+      await runDoctor({ checks, stdout, stderr });
 
-    const output: string = stdout.chunks.join('');
-    expect(output).toContain('SYSTEM');
-    expect(output).toContain('CONFIG');
-    expect(output).toContain('TOOLS');
-    expect(output).toContain('MCP');
-    expect(stderr.chunks.join('')).toBe('');
+      const output: string = stdout.chunks.join('');
+      expect(output).toContain('SYSTEM');
+      expect(output).toContain('CONFIG');
+      expect(output).toContain('TOOLS');
+      expect(output).toContain('MCP');
+      expect(stderr.chunks.join('')).toBe('');
+    } finally {
+      restoreExitCode();
+    }
   });
 
   it('groups results by category and prints symbols', async () => {
-    const stdout = createWriter();
-    const stderr = createWriter();
+    const restoreExitCode: () => void = captureExitCode();
+    try {
+      const stdout = createWriter();
+      const stderr = createWriter();
 
-    const checks: DoctorCheck[] = [
-      { name: 'sys', category: 'system', run: async () => ({ status: 'pass', message: 'Bun ok' }) },
-      {
-        name: 'cfg',
-        category: 'config',
-        run: async () => ({ status: 'warn', message: 'Config warn' }),
-      },
-      {
-        name: 'tool',
-        category: 'tools',
-        run: async () => ({ status: 'fail', message: 'git missing' }),
-      },
-      {
-        name: 'mcp',
-        category: 'mcp',
-        run: async () => ({ status: 'warn', message: 'Backlog optional' }),
-      },
-    ];
+      const checks: DoctorCheck[] = [
+        {
+          name: 'sys',
+          category: 'system',
+          run: async () => ({ status: 'pass', message: 'Bun ok' }),
+        },
+        {
+          name: 'cfg',
+          category: 'config',
+          run: async () => ({ status: 'warn', message: 'Config warn' }),
+        },
+        {
+          name: 'tool',
+          category: 'tools',
+          run: async () => ({ status: 'fail', message: 'git missing' }),
+        },
+        {
+          name: 'mcp',
+          category: 'mcp',
+          run: async () => ({ status: 'warn', message: 'Backlog optional' }),
+        },
+      ];
 
-    await runDoctor({ checks, stdout, stderr });
+      await runDoctor({ checks, stdout, stderr });
 
-    const output: string = stdout.chunks.join('');
-    expect(output).toContain('✓ Bun ok');
-    expect(output).toContain('⚠ Config warn');
-    expect(output).toContain('✗ git missing');
-    expect(output).toContain('⚠ Backlog optional');
-    expect(stderr.chunks.join('')).toContain('Doctor finished with failures');
+      const output: string = stdout.chunks.join('');
+      expect(output).toContain('✓ Bun ok');
+      expect(output).toContain('⚠ Config warn');
+      expect(output).toContain('✗ git missing');
+      expect(output).toContain('⚠ Backlog optional');
+      expect(stderr.chunks.join('')).toContain('Doctor finished with failures');
+    } finally {
+      restoreExitCode();
+    }
   });
 });
 

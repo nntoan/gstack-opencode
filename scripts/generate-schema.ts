@@ -186,4 +186,4 @@ const configSchema = {
 
 await Bun.write('schemas/config.schema.json', JSON.stringify(configSchema, null, 2) + '\n');
 
-console.log('✓ Generated schemas/config.schema.json');
+process.stdout.write('✓ Generated schemas/config.schema.json\n');
