@@ -1,0 +1,14 @@
+Path Helpers QA Evidence
+========================
+
+Test: getBrowserDir("/tmp/test")
+Output: /tmp/test/.gstack/browser
+
+Test: getBoulderPath("/tmp/test")
+Output: /tmp/test/.gstack/orchestrator/boulder.json
+
+Test: getBacklogDir("/tmp/test")
+Output: /tmp/test/.backlog
+
+All path helpers return correct paths as specified in task requirements.
+Critical: getBacklogDir returns path OUTSIDE .gstack/ directory (.backlog at project root).

@@ -1,0 +1,32 @@
+=== EVIDENCE: Task 4 - JSON Schema Generation ===
+Date: 2026-03-22
+Task: Create Config Zod v4 schema definitions
+
+GENERATION SCRIPT: scripts/generate-schema.ts
+- ✓ Imports GstackConfigSchema from src/config/schema/main.ts
+- ✓ Imports SCHEMA_URL constant from src/config/schema/constants.ts
+- ✓ Creates manual JSON Schema object (Zod v4.1 lacks z.toJsonSchema)
+- ✓ Sets $schema: https://json-schema.org/draft/2020-12/schema
+- ✓ Sets $id: https://raw.githubusercontent.com/nntoan/opencode-gstack/main/schemas/config.schema.json
+- ✓ Writes to schemas/config.schema.json
+
+OUTPUT FILE: schemas/config.schema.json
+- ✓ File created successfully
+- ✓ File size: 4.4K
+- ✓ Valid JSON format
+- ✓ Contains all config properties:
+  - orchestration_mode (enum: multi-agent | skills-only)
+  - disabled_skills, disabled_agents, disabled_mcps, disabled_hooks (arrays)
+  - agents (record of agent overrides)
+  - mcp (MCP configuration with 5 providers)
+  - backlog (enabled, auto_create_tasks, auto_update_status)
+  - browser (headless, timeout_ms)
+  - telemetry (enabled, supabase config)
+
+JSON SCHEMA VALIDATION:
+- ✓ Schema has proper $schema and $id fields
+- ✓ All enum constraints properly defined
+- ✓ Default values documented in schema
+- ✓ additionalProperties: false (strict schema)
+
+JSON SCHEMA GENERATION PASSED ✓

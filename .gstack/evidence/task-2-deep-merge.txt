@@ -1,0 +1,13 @@
+Deep Merge QA Evidence
+======================
+
+Test: deepMerge({a: {b: 1, c: 2}}, {a: {b: 99}})
+Output: {"a":{"b":99,"c":2}}
+
+Verification:
+- Base object: {a: {b: 1, c: 2}}
+- Override object: {a: {b: 99}}
+- Result correctly merges nested objects
+- Override value (b: 99) takes precedence
+- Base value (c: 2) is preserved when not overridden
+- Nested object merge works as specified

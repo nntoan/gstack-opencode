@@ -1,0 +1,33 @@
+# Task 1: Runtime Dependencies Installation Evidence
+
+## bun install Output
+bun install v1.3.2 (b131639c)
+Resolving dependencies
+Resolved, downloaded and extracted [546]
+Saved lockfile
+
++ @eslint/js@9.39.4 (v10.0.1 available)
++ @typescript-eslint/eslint-plugin@8.47.0 (v8.57.1 available)
++ @typescript-eslint/parser@8.47.0 (v8.57.1 available)
++ bun-types@1.3.10
++ eslint@9.39.4 (v10.1.0 available)
++ eslint-config-prettier@10.1.8
++ eslint-plugin-prettier@5.5.5
++ prettier@3.8.1
++ typescript@5.9.3
++ typescript-eslint@8.57.1
++ vitest@3.2.4 (v4.1.0 available)
++ @modelcontextprotocol/sdk@1.27.1
++ @opencode-ai/plugin@1.2.27
++ @opencode-ai/sdk@1.2.27
++ commander@14.0.3
++ diff@8.0.3
++ jsonc-parser@3.3.1
++ picocolors@1.1.1
++ playwright@1.58.2
++ zod@4.3.6
+
+281 packages installed [3.90s]
+
+## Status: ✓ PASS
+All dependencies installed successfully with 0 errors.

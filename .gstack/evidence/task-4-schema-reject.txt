@@ -1,0 +1,30 @@
+=== EVIDENCE: Task 4 - Schema Validation Rejection ===
+Date: 2026-03-22
+Task: Create Config Zod v4 schema definitions
+
+SCENARIO: Invalid orchestration_mode
+- Input: { orchestration_mode: 'invalid' }
+- Expected: Zod validation throws error
+- Result: ✓ REJECTED - Invalid enum value
+
+SCENARIO: Invalid websearch provider
+- Input: { mcp: { websearch: { provider: 'invalid' } } }
+- Expected: Zod validation throws error
+- Result: ✓ REJECTED - Invalid enum value (must be 'exa' or 'tavily')
+
+SCENARIO: Wrong type for timeout_ms
+- Input: { browser: { timeout_ms: 'not a number' } }
+- Expected: Zod validation throws error
+- Result: ✓ REJECTED - Expected number
+
+SCENARIO: Wrong type for disabled arrays
+- Input: { disabled_skills: 'not an array' }
+- Expected: Zod validation throws error
+- Result: ✓ REJECTED - Expected array
+
+SCENARIO: Partial agent overrides (optional fields)
+- Input: { agents: { sisyphus: { model: 'gpt-4' } } }
+- Expected: Accepted with only model field populated
+- Result: ✓ ACCEPTED - Other agent fields remain undefined
+
+ALL VALIDATION REJECTION TESTS PASSED ✓

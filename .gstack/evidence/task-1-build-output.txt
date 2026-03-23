@@ -1,0 +1,52 @@
+# Task 1: TypeScript Build Configuration Evidence
+
+## tsconfig.json Changes
+✓ Removed: "noEmit": true
+✓ Removed: "allowImportingTsExtensions": true
+✓ Added: "declaration": true
+✓ Added: "outDir": "dist"
+✓ Added: "rootDir": "src"
+
+## package.json Changes
+✓ name: "@nntoan/gstack" (changed from "gstack-opencode")
+✓ Added: "main": "dist/index.js"
+✓ Added: "types": "dist/index.d.ts"
+✓ Added: "bin": { "gstack": "bin/gstack.js" }
+✓ Added: build script: "bun build src/index.ts --outdir dist --target bun --format esm && tsc --emitDeclarationOnly"
+✓ Added: build:cli script: "bun build src/cli/index.ts --outdir dist/cli --target bun --format esm"
+✓ Added: typecheck script: "tsc --noEmit"
+✓ Added: clean script: "rm -rf dist"
+✓ Added: prepublishOnly script: "bun run clean && bun run build"
+✓ Added: generate:schema script: "bun scripts/generate-schema.ts"
+✓ Added: "files": ["dist", "bin", "src/version.ts", "schemas"]
+✓ Added: "./schema.json" export
+
+## Runtime Dependencies (8 total)
+✓ @modelcontextprotocol/sdk@^1.25.2 (installed: 1.27.1)
+✓ @opencode-ai/plugin@^1.2.24 (installed: 1.2.27)
+✓ @opencode-ai/sdk@^1.2.24 (installed: 1.2.27)
+✓ commander@^14.0.2 (installed: 14.0.3)
+✓ diff@^8.0.3 (installed: 8.0.3)
+✓ jsonc-parser@^3.3.1 (installed: 3.3.1)
+✓ picocolors@^1.1.1 (installed: 1.1.1)
+✓ playwright@^1.46.1 (installed: 1.58.2)
+✓ zod@^4.1.8 (installed: 4.3.6)
+
+## bin/gstack.js
+✓ Created with shebang: #!/usr/bin/env node
+✓ Contains dynamic import: import("../dist/cli/index.js");
+✓ File made executable: chmod +x
+
+## Verification Status
+✓ bun install: 281 packages installed [3.90s] - PASS (0 errors)
+✓ bun run typecheck: tsc --noEmit - PASS (no errors in src/)
+✓ TypeScript strict mode: enabled
+✓ Declaration emission: ready (tsc --emitDeclarationOnly)
+
+## All Requirements Met
+✓ package.json has all 8 runtime deps
+✓ package.json has main, types, bin fields
+✓ tsconfig.json updated for declaration emit
+✓ bin/gstack.js exists with correct shebang
+✓ bun install succeeds with 0 errors
+✓ bun run typecheck passes

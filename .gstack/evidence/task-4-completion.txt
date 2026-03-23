@@ -1,0 +1,81 @@
+=== EVIDENCE: Task 4 - Completion Summary ===
+Date: 2026-03-22
+Task: Create Config Zod v4 schema definitions including MCP + backlog settings, plus JSON Schema generation
+
+DELIVERABLES CHECKLIST:
+========================================
+
+Schema Definitions:
+✓ src/config/schema/main.ts — GstackConfigSchema top-level (v4 Zod)
+✓ src/config/schema/agent-schema.ts — AgentOverridesSchema (agent model/instructions/enabled)
+✓ src/config/schema/mcp-schema.ts — McpConfigSchema (websearch/context7/contexthub/grep_app/backlog_md)
+✓ src/config/schema/backlog-schema.ts — BacklogConfigSchema (enabled/auto_create_tasks/auto_update_status)
+✓ src/config/schema/browser-schema.ts — BrowserConfigSchema (headless/timeout_ms)
+✓ src/config/schema/telemetry-schema.ts — TelemetryConfigSchema (enabled/supabase)
+
+Utilities:
+✓ src/config/schema/constants.ts — SCHEMA_URL constant
+✓ src/config/schema/index.ts — barrel exports (all schemas + types)
+
+Code Generation:
+✓ scripts/generate-schema.ts — Zod→JSON Schema generation script
+✓ schemas/config.schema.json — Generated JSON Schema file (4.4K)
+
+Test Suite:
+✓ src/config/schema/main.test.ts — 19 comprehensive tests
+  - Empty config defaults validation
+  - Orchestration mode validation
+  - Disabled arrays handling
+  - Agent overrides
+  - Backlog configuration
+  - MCP configuration with provider enums
+  - Browser configuration
+  - Telemetry configuration
+  - Full complex config
+  - Type exports
+
+Evidence Files:
+✓ .gstack/evidence/task-4-schema-defaults.txt — Default value validation
+✓ .gstack/evidence/task-4-schema-reject.txt — Validation rejection scenarios
+✓ .gstack/evidence/task-4-json-schema-gen.txt — JSON Schema generation proof
+✓ .gstack/evidence/task-4-completion.txt — This completion summary
+
+Build & Test Status:
+✓ bun test src/config/ — 92 tests pass, 0 fail (includes 19 schema tests + Task 3 tests)
+✓ bun run build — passes successfully
+✓ bun run typecheck — no errors
+✓ tsconfig.build.json — updated to allow .ts imports (allowImportingTsExtensions: true)
+
+SCHEMA FEATURES:
+========================================
+
+GstackConfigSchema validates:
+- orchestration_mode: 'multi-agent' | 'skills-only' (default: multi-agent)
+- disabled_skills, disabled_agents, disabled_mcps, disabled_hooks: arrays
+- agents: record<string, AgentOverride> — per-agent config overrides
+- mcp: nested config for 5 MCP providers:
+  * websearch (exa | tavily provider, api_key, enabled)
+  * context7 (api_key, enabled)
+  * contexthub (enabled)
+  * grep_app (enabled)
+  * backlog_md (enabled)
+- backlog: enabled, auto_create_tasks, auto_update_status (all default true)
+- browser: headless (default true), timeout_ms (default 30000)
+- telemetry: enabled (default true), supabase config
+
+All optional fields have sensible defaults applied via Zod schema.
+
+JSON SCHEMA COMPLIANCE:
+- $schema: https://json-schema.org/draft/2020-12/schema
+- $id: https://raw.githubusercontent.com/nntoan/opencode-gstack/main/schemas/config.schema.json
+- additionalProperties: false (strict validation)
+- All enums properly defined
+- Default values documented
+
+COMPATIBILITY:
+✓ Zod v4.1.8 (using manual JSON Schema generation, not z.toJsonSchema)
+✓ TypeScript strict mode
+✓ ES modules with .ts imports
+✓ Compatible with src/types/config.ts from Task 3
+
+ALL REQUIREMENTS MET ✓

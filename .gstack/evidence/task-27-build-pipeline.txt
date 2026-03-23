@@ -1,0 +1,76 @@
+# Task 27: Build Pipeline + package.json Finalization
+# Evidence: Build successful with all required outputs
+
+## Status: COMPLETE ✓
+
+### 1. package.json Updates
+- ✓ bin.gstack updated: "bin/gstack.js" → "dist/cli.js"
+- ✓ build:cli script fixed: --outdir dist/cli → --outfile dist/cli.js
+- ✓ build:all script added: "bun run build && bun run build:cli"
+- ✓ prepublishOnly updated: "bun run clean && bun run build" → "bun run build:all"
+- ✓ playwright moved: dependencies → peerDependencies (>=1.40.0, optional)
+- ✓ playwright kept in devDependencies for local development
+
+### 2. tsconfig.build.json Verification
+- ✓ allowImportingTsExtensions: true (handles explicit .ts imports)
+- ✓ declaration: true (emits type definitions)
+- ✓ noEmit: false (allows output)
+- ✓ outDir: "dist" (correct output location)
+- ✓ exclude: ["**/*.test.ts"] (tests excluded from declaration emit)
+
+### 3. Build Pipeline Results
+
+#### bun run build
+- ✓ index.js bundled: 1.51 MB (entry point)
+- ✓ index.d.ts generated (type definitions)
+- ✓ Bundled 387 modules in 52ms
+
+#### bun run build:cli
+- ✓ cli.js bundled: 0.63 MB (executable)
+- ✓ Bundled 108 modules in 21ms
+- ✓ File: dist/cli.js (executable, -rwxr-xr-x)
+
+#### bun run typecheck
+- ✓ tsc --noEmit: 0 errors
+- ✓ All TypeScript types valid
+
+### 4. Dist Output Verification
+
+Files in dist/:
+- ✓ index.js (1.5 MB) - ESM module entry point
+- ✓ index.d.ts - TypeScript type definitions
+- ✓ cli.js (616 KB) - Executable CLI
+- ✓ create-hooks.d.ts
+- ✓ create-managers.d.ts
+- ✓ create-skills-and-agents.d.ts
+- ✓ create-tools.d.ts
+- ✓ plugin-config.d.ts
+- ✓ plugin-interface.d.ts
+- ✓ types.d.ts
+- ✓ agents/ (subdirectory with type defs)
+- ✓ cli/ (subdirectory with type defs)
+- ✓ config/ (subdirectory with type defs)
+- ✓ features/ (subdirectory with type defs)
+- ✓ mcp/ (subdirectory with type defs)
+- ✓ plugin-handlers/ (subdirectory with type defs)
+- ✓ shared/ (subdirectory)
+- ✓ types/ (subdirectory)
+
+### 5. ESM Import Test
+```bash
+bun -e "import plugin from './dist/index.js'; console.log(typeof plugin)"
+```
+Result: function ✓
+
+### 6. Summary
+All build pipeline requirements met:
+- ✓ bun run build succeeds → dist/index.js + dist/index.d.ts
+- ✓ bun run build:cli succeeds → dist/cli.js
+- ✓ bun run build:all succeeds (both above)
+- ✓ bun run typecheck passes (0 errors)
+- ✓ ESM import works: typeof plugin === "function"
+- ✓ bin.gstack correctly points to dist/cli.js
+- ✓ peerDependencies configured correctly (playwright optional)
+- ✓ tsconfig.build.json configured correctly
+
+Build pipeline is PRODUCTION READY.

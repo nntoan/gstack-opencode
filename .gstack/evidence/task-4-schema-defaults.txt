@@ -1,0 +1,41 @@
+=== EVIDENCE: Task 4 - Schema Defaults Validation ===
+Date: 2026-03-22
+Task: Create Config Zod v4 schema definitions
+
+SCENARIO: Empty config defaults
+- Input: {}
+- Expected defaults applied:
+  ✓ orchestration_mode = 'multi-agent'
+  ✓ disabled_skills = []
+  ✓ disabled_agents = []
+  ✓ disabled_mcps = []
+  ✓ disabled_hooks = []
+  ✓ backlog.enabled = true
+  ✓ backlog.auto_create_tasks = true
+  ✓ backlog.auto_update_status = true
+
+SCENARIO: Backlog defaults
+- Input: { backlog: {} }
+- Expected defaults applied:
+  ✓ backlog.enabled = true
+  ✓ backlog.auto_create_tasks = true
+  ✓ backlog.auto_update_status = true
+
+SCENARIO: MCP websearch defaults
+- Input: { mcp: { websearch: {} } }
+- Expected defaults applied:
+  ✓ mcp.websearch.provider = 'exa'
+  ✓ mcp.websearch.enabled = true
+
+SCENARIO: Browser defaults
+- Input: { browser: {} }
+- Expected defaults applied:
+  ✓ browser.headless = true
+  ✓ browser.timeout_ms = 30000
+
+SCENARIO: Telemetry defaults
+- Input: { telemetry: {} }
+- Expected defaults applied:
+  ✓ telemetry.enabled = true
+
+ALL DEFAULT VALIDATION TESTS PASSED ✓
