@@ -17,7 +17,7 @@ Use Garry Tan's exact OpenCode setup: 15 opinionated tools that serve as CEO, De
 - `mise run build` - Build the module
 - `mise run test` - Run tests
 - `mise run lint` - Lint code
-- `mise run lint:fix` - Fix linting issues
+- `mise run lint-fix` - Fix linting issues
 - `mise run format` - Format code with Prettier
 
 ## Release
