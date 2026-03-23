@@ -1,13 +1,15 @@
 {
   "compilerOptions": {
-    "lib": ["ESNext", "DOM"],
+    "lib": ["ESNext", "DOM", "DOM.Iterable"],
     "target": "ESNext",
     "module": "ESNext",
     "moduleResolution": "bundler",
     "strict": true,
-    "noEmit": true,
     "skipLibCheck": true,
-    "allowImportingTsExtensions": true,
-    "types": ["bun-types"]
-  }
+    "types": ["bun-types"],
+    "noEmit": true,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "researchs"]
 }
