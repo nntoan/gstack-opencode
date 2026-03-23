@@ -1,0 +1,22 @@
+{
+  "name": "@nntoan/gstack-darwin-x64",
+  "version": "0.0.1",
+  "description": "Platform-specific binary for @nntoan/gstack (darwin-x64)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nntoan/gstack-opencode"
+  },
+  "os": [
+    "darwin"
+  ],
+  "cpu": [
+    "x64"
+  ],
+  "files": [
+    "bin"
+  ],
+  "bin": {
+    "gstack": "./bin/gstack"
+  }
+}

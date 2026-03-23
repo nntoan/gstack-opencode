@@ -1,0 +1,22 @@
+{
+  "name": "@nntoan/gstack-win32-ia32",
+  "version": "0.0.1",
+  "description": "Platform-specific binary for @nntoan/gstack (win32-ia32)",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/nntoan/gstack-opencode"
+  },
+  "os": [
+    "win32"
+  ],
+  "cpu": [
+    "ia32"
+  ],
+  "files": [
+    "bin"
+  ],
+  "bin": {
+    "gstack": "./bin/gstack.exe"
+  }
+}
