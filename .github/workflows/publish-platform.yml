@@ -44,9 +44,7 @@ jobs:
           - gstack-linux-x64
           - gstack-linux-arm64-musl
           - gstack-linux-x64-musl
-          - gstack-win32-arm64
           - gstack-win32-x64
-          - gstack-win32-ia32
           - gstack-freebsd-x64
           - gstack-freebsd-arm64
           - gstack-openbsd-x64
@@ -125,9 +123,7 @@ jobs:
           - gstack-linux-x64
           - gstack-linux-arm64-musl
           - gstack-linux-x64-musl
-          - gstack-win32-arm64
           - gstack-win32-x64
-          - gstack-win32-ia32
           - gstack-freebsd-x64
           - gstack-freebsd-arm64
           - gstack-openbsd-x64
