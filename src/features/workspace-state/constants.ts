@@ -1,0 +1,12 @@
+export const GSTACK_DIR = '.gstack';
+export const BOULDER_FILE = 'boulder.json';
+export const ORCHESTRATOR_DIR = 'orchestrator';
+export const SESSIONS_DIR = 'sessions';
+export const NOTEPADS_DIR = 'notepads';
+export const REVIEWS_DIR = 'reviews';
+export const PLANS_DIR = 'plans';
+export const EVIDENCE_DIR = 'evidence';
+export const DESIGN_DOCS_DIR = 'design-docs';
+export const RULES_DIR = 'rules';
+export const BROWSER_DIR = 'browser';
+export const ANALYTICS_DIR = 'analytics';
