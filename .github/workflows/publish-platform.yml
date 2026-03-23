@@ -1,0 +1,184 @@
+name: publish-platform
+run-name: 'platform packages ${{ inputs.version }}'
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      dist_tag:
+        required: false
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to publish (e.g., 1.0.0)'
+        required: true
+        type: string
+      dist_tag:
+        description: 'npm dist tag (e.g., beta, latest)'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ${{ startsWith(matrix.platform, 'gstack-win32-') && 'windows-latest' || 'ubuntu-latest' }}
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      fail-fast: false
+      max-parallel: 12
+      matrix:
+        platform:
+          - gstack-darwin-arm64
+          - gstack-darwin-x64
+          - gstack-linux-arm64
+          - gstack-linux-x64
+          - gstack-linux-arm64-musl
+          - gstack-linux-x64-musl
+          - gstack-win32-arm64
+          - gstack-win32-x64
+          - gstack-win32-ia32
+          - gstack-freebsd-x64
+          - gstack-freebsd-arm64
+          - gstack-openbsd-x64
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Check if already published
+        id: check
+        run: |
+          VERSION="${{ inputs.version }}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@nntoan/${{ matrix.platform }}/${VERSION}")
+          if [ "$STATUS" = "200" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Update version in package.json
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          VERSION="${{ inputs.version }}"
+          jq --arg v "$VERSION" '.version = $v' packages/${{ matrix.platform }}/package.json > tmp.json
+          mv tmp.json packages/${{ matrix.platform }}/package.json
+
+      - name: Build binary
+        if: steps.check.outputs.skip != 'true'
+        uses: nick-fields/retry@v3
+        with:
+          timeout_minutes: 10
+          max_attempts: 3
+          retry_wait_seconds: 15
+          shell: bash
+          command: bun run scripts/build-platform.ts --target=${{ matrix.platform }}
+
+      - name: Compress artifact
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          PLATFORM="${{ matrix.platform }}"
+          cd packages/${PLATFORM}
+          if [[ "$PLATFORM" == gstack-win32-* ]]; then
+            7z a -tzip ../../binary-${PLATFORM}.zip bin/ package.json
+          else
+            tar -czvf ../../binary-${PLATFORM}.tar.gz bin/ package.json
+          fi
+
+      - name: Upload artifact
+        if: steps.check.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: binary-${{ matrix.platform }}
+          path: |
+            binary-${{ matrix.platform }}.tar.gz
+            binary-${{ matrix.platform }}.zip
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix:
+        platform:
+          - gstack-darwin-arm64
+          - gstack-darwin-x64
+          - gstack-linux-arm64
+          - gstack-linux-x64
+          - gstack-linux-arm64-musl
+          - gstack-linux-x64-musl
+          - gstack-win32-arm64
+          - gstack-win32-x64
+          - gstack-win32-ia32
+          - gstack-freebsd-x64
+          - gstack-freebsd-arm64
+          - gstack-openbsd-x64
+    steps:
+      - name: Check if already published
+        id: check
+        run: |
+          VERSION="${{ inputs.version }}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@nntoan/${{ matrix.platform }}/${VERSION}")
+          if [ "$STATUS" = "200" ]; then
+            echo "skip=true" >> $GITHUB_OUTPUT
+          else
+            echo "skip=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download artifact
+        id: download
+        if: steps.check.outputs.skip != 'true'
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: binary-${{ matrix.platform }}
+          path: .
+
+      - name: Extract artifact
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        run: |
+          PLATFORM="${{ matrix.platform }}"
+          mkdir -p packages/${PLATFORM}
+          if [[ "$PLATFORM" == gstack-win32-* ]]; then
+            unzip binary-${PLATFORM}.zip -d packages/${PLATFORM}/
+          else
+            tar -xzvf binary-${PLATFORM}.tar.gz -C packages/${PLATFORM}/
+          fi
+
+      - uses: actions/setup-node@v4
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        with:
+          node-version: '22'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Publish @nntoan/${{ matrix.platform }}
+        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        run: |
+          cd packages/${{ matrix.platform }}
+          TAG_ARG=""
+          if [ -n "${{ inputs.dist_tag }}" ]; then
+            TAG_ARG="--tag ${{ inputs.dist_tag }}"
+          fi
+          npm publish --access public --provenance $TAG_ARG
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+          NPM_CONFIG_PROVENANCE: true
+        timeout-minutes: 15
