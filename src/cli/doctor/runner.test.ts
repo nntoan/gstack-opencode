@@ -20,7 +20,7 @@ function createWriter(): MemoryWriter {
 }
 
 function captureExitCode(): () => void {
-  const previousExitCode: number | undefined = process.exitCode;
+  const previousExitCode = process.exitCode;
   return (): void => {
     process.exitCode = previousExitCode;
   };
