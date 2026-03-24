@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/nntoan/gstack-opencode/compare/v0.2.0...v0.3.0) (2026-03-24)
+
+
+### Features
+
+* **release:** adopt new baseline binary matrix ([95a9512](https://github.com/nntoan/gstack-opencode/commit/95a951286d029032599070a99a54dddabba9d746))
+
+
+### Bug Fixes
+
+* **release:** remove unsupported windows platform targets ([7cc0f77](https://github.com/nntoan/gstack-opencode/commit/7cc0f7715c81793cabc1a7dbf08ee95d6c3c200c))
+
 ## [0.2.0](https://github.com/nntoan/gstack-opencode/compare/v0.1.0...v0.2.0) (2026-03-23)
 
 
