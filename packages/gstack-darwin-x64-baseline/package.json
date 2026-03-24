@@ -1,14 +1,14 @@
 {
-  "name": "@nntoan/gstack-freebsd-x64",
+  "name": "@nntoan/gstack-darwin-x64-baseline",
   "version": "0.0.1",
-  "description": "Platform-specific binary for @nntoan/gstack (freebsd-x64)",
+  "description": "Platform-specific binary for @nntoan/gstack (darwin-x64-baseline)",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/nntoan/gstack-opencode"
   },
   "os": [
-    "freebsd"
+    "darwin"
   ],
   "cpu": [
     "x64"

@@ -1,17 +1,20 @@
 {
-  "name": "@nntoan/gstack-openbsd-x64",
+  "name": "@nntoan/gstack-linux-x64-musl-baseline",
   "version": "0.0.1",
-  "description": "Platform-specific binary for @nntoan/gstack (openbsd-x64)",
+  "description": "Platform-specific binary for @nntoan/gstack (linux-x64-musl-baseline)",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/nntoan/gstack-opencode"
   },
   "os": [
-    "openbsd"
+    "linux"
   ],
   "cpu": [
     "x64"
+  ],
+  "libc": [
+    "musl"
   ],
   "files": [
     "bin"

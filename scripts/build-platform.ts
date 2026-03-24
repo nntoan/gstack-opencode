@@ -11,14 +11,19 @@ interface PlatformTarget {
 const PLATFORMS: PlatformTarget[] = [
   { dir: 'gstack-darwin-arm64', target: 'bun-darwin-arm64', binary: 'gstack' },
   { dir: 'gstack-darwin-x64', target: 'bun-darwin-x64', binary: 'gstack' },
+  { dir: 'gstack-darwin-x64-baseline', target: 'bun-darwin-x64-baseline', binary: 'gstack' },
+  { dir: 'gstack-linux-x64-baseline', target: 'bun-linux-x64-baseline', binary: 'gstack' },
   { dir: 'gstack-linux-arm64', target: 'bun-linux-arm64', binary: 'gstack' },
   { dir: 'gstack-linux-x64', target: 'bun-linux-x64', binary: 'gstack' },
+  {
+    dir: 'gstack-linux-x64-musl-baseline',
+    target: 'bun-linux-x64-baseline-musl',
+    binary: 'gstack',
+  },
   { dir: 'gstack-linux-arm64-musl', target: 'bun-linux-arm64-musl', binary: 'gstack' },
   { dir: 'gstack-linux-x64-musl', target: 'bun-linux-x64-musl', binary: 'gstack' },
+  { dir: 'gstack-win32-x64-baseline', target: 'bun-windows-x64-baseline', binary: 'gstack.exe' },
   { dir: 'gstack-win32-x64', target: 'bun-windows-x64', binary: 'gstack.exe' },
-  { dir: 'gstack-freebsd-x64', target: 'bun-linux-x64', binary: 'gstack' },
-  { dir: 'gstack-freebsd-arm64', target: 'bun-linux-arm64', binary: 'gstack' },
-  { dir: 'gstack-openbsd-x64', target: 'bun-linux-x64', binary: 'gstack' },
 ];
 
 const ENTRY_POINT = 'src/cli/index.ts';
@@ -80,7 +85,7 @@ async function main(argv: string[]): Promise<void> {
   }
 
   const targets = targetArg
-    ? PLATFORMS.filter((p) => p.target === targetArg || p.dir.includes(targetArg))
+    ? PLATFORMS.filter((p) => p.target === targetArg || p.dir === targetArg)
     : PLATFORMS;
 
   if (targets.length === 0) {

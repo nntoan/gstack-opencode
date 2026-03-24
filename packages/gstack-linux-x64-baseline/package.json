@@ -1,22 +1,25 @@
 {
-  "name": "@nntoan/gstack-win32-arm64",
+  "name": "@nntoan/gstack-linux-x64-baseline",
   "version": "0.0.1",
-  "description": "Platform-specific binary for @nntoan/gstack (win32-arm64)",
+  "description": "Platform-specific binary for @nntoan/gstack (linux-x64-baseline)",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/nntoan/gstack-opencode"
   },
   "os": [
-    "win32"
+    "linux"
   ],
   "cpu": [
-    "arm64"
+    "x64"
+  ],
+  "libc": [
+    "glibc"
   ],
   "files": [
     "bin"
   ],
   "bin": {
-    "gstack": "./bin/gstack.exe"
+    "gstack": "./bin/gstack"
   }
 }

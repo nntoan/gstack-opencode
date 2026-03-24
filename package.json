@@ -68,14 +68,15 @@
   "optionalDependencies": {
     "@nntoan/gstack-darwin-arm64": "0.0.1",
     "@nntoan/gstack-darwin-x64": "0.0.1",
+    "@nntoan/gstack-darwin-x64-baseline": "0.0.1",
     "@nntoan/gstack-linux-arm64": "0.0.1",
     "@nntoan/gstack-linux-x64": "0.0.1",
+    "@nntoan/gstack-linux-x64-baseline": "0.0.1",
     "@nntoan/gstack-linux-arm64-musl": "0.0.1",
     "@nntoan/gstack-linux-x64-musl": "0.0.1",
+    "@nntoan/gstack-linux-x64-musl-baseline": "0.0.1",
     "@nntoan/gstack-win32-x64": "0.0.1",
-    "@nntoan/gstack-freebsd-x64": "0.0.1",
-    "@nntoan/gstack-freebsd-arm64": "0.0.1",
-    "@nntoan/gstack-openbsd-x64": "0.0.1"
+    "@nntoan/gstack-win32-x64-baseline": "0.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

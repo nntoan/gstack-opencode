@@ -40,14 +40,15 @@ jobs:
         platform:
           - gstack-darwin-arm64
           - gstack-darwin-x64
+          - gstack-darwin-x64-baseline
           - gstack-linux-arm64
           - gstack-linux-x64
+          - gstack-linux-x64-baseline
           - gstack-linux-arm64-musl
           - gstack-linux-x64-musl
+          - gstack-linux-x64-musl-baseline
           - gstack-win32-x64
-          - gstack-freebsd-x64
-          - gstack-freebsd-arm64
-          - gstack-openbsd-x64
+          - gstack-win32-x64-baseline
     steps:
       - uses: actions/checkout@v4
 
@@ -119,14 +120,15 @@ jobs:
         platform:
           - gstack-darwin-arm64
           - gstack-darwin-x64
+          - gstack-darwin-x64-baseline
           - gstack-linux-arm64
           - gstack-linux-x64
+          - gstack-linux-x64-baseline
           - gstack-linux-arm64-musl
           - gstack-linux-x64-musl
+          - gstack-linux-x64-musl-baseline
           - gstack-win32-x64
-          - gstack-freebsd-x64
-          - gstack-freebsd-arm64
-          - gstack-openbsd-x64
+          - gstack-win32-x64-baseline
     steps:
       - name: Check if already published
         id: check
