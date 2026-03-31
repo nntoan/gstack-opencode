@@ -14,7 +14,7 @@ const GstackPlugin: Plugin = async (ctx) => {
 
   const pluginConfig = loadPluginConfig(ctx.directory, ctx);
   const { skills, agents } = createSkillsAndAgents(pluginConfig);
-  const managers = createManagers({ ctx, pluginConfig, skills });
+  const managers = createManagers({ ctx, pluginConfig, skills, agents });
   const orchestrator = createOrchestrator({ agents, skills, config: pluginConfig });
   const toolsResult = createTools({ ctx, pluginConfig, managers });
   const hooks = createHooks({ ctx, pluginConfig, managers });

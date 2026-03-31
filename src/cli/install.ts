@@ -3,7 +3,7 @@ import * as path from 'path';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { SCHEMA_URL } from '../config/schema/constants.ts';
 
-const PROJECT_CONFIG_TEMPLATE = `{
+const CONFIG_TEMPLATE = `{
   "$schema": "${SCHEMA_URL}",
   // Orchestration mode: "multi-agent" (default) or "skills-only" (backward compat)
   "orchestration_mode": "multi-agent",
@@ -58,16 +58,16 @@ function ensurePluginInGlobalConfig(options: InstallOptions): void {
 }
 
 export async function runInstallWithOptions(options: InstallOptions): Promise<void> {
-  const opencodeDir: string = path.join(options.cwd, '.opencode');
-  const configPath: string = path.join(opencodeDir, 'gstack.jsonc');
+  const globalConfigDir: string = path.join(options.homeDir, '.config', 'opencode');
+  const globalConfigPath: string = path.join(globalConfigDir, 'gstack.jsonc');
 
-  mkdirSync(opencodeDir, { recursive: true });
+  mkdirSync(globalConfigDir, { recursive: true });
 
-  if (!existsSync(configPath)) {
-    writeFileSync(configPath, PROJECT_CONFIG_TEMPLATE, 'utf-8');
-    options.stdout.write(`Created project config: ${configPath}\n`);
+  if (!existsSync(globalConfigPath)) {
+    writeFileSync(globalConfigPath, CONFIG_TEMPLATE, 'utf-8');
+    options.stdout.write(`Created global config: ${globalConfigPath}\n`);
   } else {
-    options.stdout.write(`Project config already exists: ${configPath}\n`);
+    options.stdout.write(`Global config already exists: ${globalConfigPath}\n`);
   }
 
   ensurePluginInGlobalConfig(options);

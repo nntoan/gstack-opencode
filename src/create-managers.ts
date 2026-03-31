@@ -1,5 +1,6 @@
 import type { GstackConfig } from './types/config.ts';
 import type { GstackSkill } from './types/skill.ts';
+import type { GstackAgent } from './types/agent.ts';
 import type { McpToolInvoker } from './features/skill-mcp-manager/index.ts';
 import { SkillMcpManager } from './features/skill-mcp-manager/index.ts';
 import { createConfigHandler } from './plugin-handlers/index.ts';
@@ -26,11 +27,12 @@ export function createManagers(params: {
   ctx: { directory: string };
   pluginConfig: GstackConfig;
   skills?: GstackSkill[];
+  agents?: GstackAgent[];
 }): Managers {
-  const { ctx, pluginConfig, skills } = params;
+  const { ctx, pluginConfig, skills, agents } = params;
 
   const skillMcpManager = new SkillMcpManager();
-  const configHandler = createConfigHandler({ ctx, pluginConfig, skills });
+  const configHandler = createConfigHandler({ ctx, pluginConfig, skills, agents });
   const mcpInvoker = createCtxMcpInvoker(ctx);
   const sprintBacklog = createSprintBacklog(mcpInvoker);
 

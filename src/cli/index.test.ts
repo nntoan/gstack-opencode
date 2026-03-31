@@ -31,8 +31,8 @@ afterEach(() => {
 });
 
 describe('runInstallWithOptions', () => {
-  it('creates project config when missing', async () => {
-    const root: string = createTempRoot('install-create-config');
+  it('creates global config when missing', async () => {
+    const root: string = createTempRoot('install-create-global-config');
     const cwd: string = path.join(root, 'project');
     const homeDir: string = path.join(root, 'home');
 
@@ -42,9 +42,9 @@ describe('runInstallWithOptions', () => {
     const stdout = createWriter();
     await runInstallWithOptions({ cwd, homeDir, stdout });
 
-    const configPath: string = path.join(cwd, '.opencode', 'gstack.jsonc');
+    const configPath: string = path.join(homeDir, '.config', 'opencode', 'gstack.jsonc');
     expect(existsSync(configPath)).toBe(true);
-    expect(stdout.chunks.join('')).toContain('Created project config');
+    expect(stdout.chunks.join('')).toContain('Created global config');
   });
 
   it('adds @nntoan/gstack to global plugin list if missing', async () => {
@@ -68,5 +68,20 @@ describe('runInstallWithOptions', () => {
     const parsed = JSON.parse(content) as { plugin?: string[] };
     expect(parsed.plugin).toEqual(['other-plugin', '@nntoan/gstack']);
     expect(content.length).toBeGreaterThan(0);
+  });
+
+  it('does not create project .opencode/gstack.jsonc during install', async () => {
+    const root: string = createTempRoot('install-no-project-config');
+    const cwd: string = path.join(root, 'project');
+    const homeDir: string = path.join(root, 'home');
+
+    mkdirSync(cwd, { recursive: true });
+    mkdirSync(homeDir, { recursive: true });
+
+    const stdout = createWriter();
+    await runInstallWithOptions({ cwd, homeDir, stdout });
+
+    const projectConfigPath: string = path.join(cwd, '.opencode', 'gstack.jsonc');
+    expect(existsSync(projectConfigPath)).toBe(false);
   });
 });

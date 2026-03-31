@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createConfigHandler } from './config-handler.ts';
 import type { GstackConfig } from '../types/config.ts';
+import type { GstackAgent } from '../types/agent.ts';
 
 function makePluginConfig(overrides: Partial<GstackConfig> = {}): GstackConfig {
   return {
@@ -15,6 +16,26 @@ function makePluginConfig(overrides: Partial<GstackConfig> = {}): GstackConfig {
 }
 
 describe('createConfigHandler', () => {
+  const sampleAgents: GstackAgent[] = [
+    {
+      role: 'ceo',
+      name: 'CEO',
+      description: 'CEO agent',
+      sprintPhase: 'think',
+      skills: [],
+      instructions: 'CEO instructions',
+    },
+    {
+      role: 'builder',
+      name: 'Builder',
+      description: 'Builder agent',
+      sprintPhase: 'build',
+      skills: [],
+      instructions: 'Builder instructions',
+      model: 'model-builder',
+    },
+  ];
+
   it('returns a function', () => {
     const handler = createConfigHandler({
       ctx: { directory: '/tmp/test' },
@@ -39,12 +60,27 @@ describe('createConfigHandler', () => {
       agents: { 'ceo-agent': { model: 'claude-opus-4', enabled: true } },
     });
     const config: Record<string, unknown> = {};
-    const handler = createConfigHandler({ ctx: { directory: '/tmp' }, pluginConfig });
+    const handler = createConfigHandler({
+      ctx: { directory: '/tmp' },
+      pluginConfig,
+      agents: sampleAgents,
+    });
     await handler(config);
 
-    const agents = config.agents as Record<string, unknown>;
+    const agents = config.agent as Record<string, unknown>;
     expect(agents).toBeDefined();
     expect(agents['ceo-agent']).toMatchObject({ model: 'claude-opus-4', enabled: true });
+    expect(agents.ceo).toMatchObject({
+      description: 'CEO agent',
+      prompt: 'CEO instructions',
+      mode: 'all',
+    });
+    expect(agents.builder).toMatchObject({
+      description: 'Builder agent',
+      prompt: 'Builder instructions',
+      mode: 'all',
+      model: 'model-builder',
+    });
   });
 
   it('in skills-only mode: agents are NOT registered', async () => {
@@ -56,7 +92,7 @@ describe('createConfigHandler', () => {
     const handler = createConfigHandler({ ctx: { directory: '/tmp' }, pluginConfig });
     await handler(config);
 
-    const agents = config.agents as Record<string, unknown> | undefined;
+    const agents = config.agent as Record<string, unknown> | undefined;
     expect(agents?.['ceo-agent']).toBeUndefined();
   });
 
@@ -70,12 +106,40 @@ describe('createConfigHandler', () => {
       },
     });
     const config: Record<string, unknown> = {};
-    const handler = createConfigHandler({ ctx: { directory: '/tmp' }, pluginConfig });
+    const handler = createConfigHandler({
+      ctx: { directory: '/tmp' },
+      pluginConfig,
+      agents: sampleAgents,
+    });
     await handler(config);
 
-    const agents = config.agents as Record<string, unknown>;
+    const agents = config.agent as Record<string, unknown>;
     expect(agents?.['ceo-agent']).toBeUndefined();
     expect(agents?.['builder-agent']).toBeDefined();
+    expect(agents.builder).toBeDefined();
+  });
+
+  it('supports legacy existing config.agents input by normalizing into config.agent', async () => {
+    const pluginConfig = makePluginConfig();
+    const config: Record<string, unknown> = {
+      agents: {
+        legacy: { description: 'legacy desc', prompt: 'legacy prompt', mode: 'all' },
+      },
+    };
+    const handler = createConfigHandler({
+      ctx: { directory: '/tmp' },
+      pluginConfig,
+      agents: sampleAgents,
+    });
+    await handler(config);
+
+    const normalized = config.agent as Record<string, unknown>;
+    expect(normalized.legacy).toMatchObject({
+      description: 'legacy desc',
+      prompt: 'legacy prompt',
+      mode: 'all',
+    });
+    expect(normalized.ceo).toBeDefined();
   });
 
   it('disabled_mcps are excluded via applyMcpConfig integration', async () => {

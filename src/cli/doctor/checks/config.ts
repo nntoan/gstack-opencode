@@ -5,7 +5,7 @@ import { GstackConfigSchema } from '../../../config/schema/main.ts';
 import type { DoctorCheck, DoctorResult } from '../types.ts';
 
 function getProjectConfigPath(): string {
-  return path.join(process.cwd(), '.opencode', 'gstack.jsonc');
+  return path.join(process.env.HOME ?? '~', '.config', 'opencode', 'gstack.jsonc');
 }
 
 async function runConfigParseCheck(): Promise<DoctorResult> {

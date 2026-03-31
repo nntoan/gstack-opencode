@@ -1,5 +1,6 @@
 import type { GstackConfig } from '../types/config.ts';
 import type { GstackSkill } from '../types/skill.ts';
+import type { GstackAgent } from '../types/agent.ts';
 import { log } from '../shared/index.ts';
 import { applyMcpConfig } from './mcp-config-handler.ts';
 
@@ -7,6 +8,7 @@ export interface ConfigHandlerDeps {
   ctx: { directory: string };
   pluginConfig: GstackConfig;
   skills?: GstackSkill[];
+  agents?: GstackAgent[];
 }
 
 function skillsToCommands(skills: GstackSkill[]): Record<string, unknown> {
@@ -29,23 +31,46 @@ function skillsToCommands(skills: GstackSkill[]): Record<string, unknown> {
   return commands;
 }
 
+function agentsToOpenCodeAgentConfig(agents: GstackAgent[]): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const agent of agents) {
+    const entry: Record<string, unknown> = {
+      description: agent.description,
+      prompt: agent.instructions,
+      mode: 'all',
+    };
+    if (agent.model) entry.model = agent.model;
+    out[agent.role] = entry;
+  }
+  return out;
+}
+
 function applyAgentConfig(params: {
   config: Record<string, unknown>;
   pluginConfig: GstackConfig;
+  agents?: GstackAgent[];
 }): void {
-  const { config, pluginConfig } = params;
+  const { config, pluginConfig, agents } = params;
   const disabledSet = new Set(pluginConfig.disabled_agents ?? []);
   const agentOverrides = pluginConfig.agents ?? {};
+  const builtInAgents = agents ? agentsToOpenCodeAgentConfig(agents) : {};
 
-  const existingAgents = (config.agents as Record<string, unknown>) ?? {};
-  const merged: Record<string, unknown> = { ...existingAgents };
+  const existingAgents =
+    (config.agent as Record<string, unknown>) ?? (config.agents as Record<string, unknown>) ?? {};
+  const merged: Record<string, unknown> = { ...builtInAgents, ...existingAgents };
+
+  for (const key of Object.keys(merged)) {
+    if (disabledSet.has(key)) {
+      delete merged[key];
+    }
+  }
 
   for (const [key, override] of Object.entries(agentOverrides)) {
     if (disabledSet.has(key)) continue;
     merged[key] = { ...(merged[key] as Record<string, unknown> | undefined), ...override };
   }
 
-  config.agents = merged;
+  config.agent = merged;
 }
 
 function applySkillConfig(params: {
@@ -70,11 +95,11 @@ function applySkillConfig(params: {
 }
 
 export function createConfigHandler(deps: ConfigHandlerDeps) {
-  const { pluginConfig, skills } = deps;
+  const { pluginConfig, skills, agents } = deps;
 
   return async (config: Record<string, unknown>): Promise<void> => {
     if (pluginConfig.orchestration_mode === 'multi-agent') {
-      applyAgentConfig({ config, pluginConfig });
+      applyAgentConfig({ config, pluginConfig, agents });
     }
 
     applySkillConfig({ config, pluginConfig, skills });

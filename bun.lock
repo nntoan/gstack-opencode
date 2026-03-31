@@ -39,7 +39,6 @@
         "@nntoan/gstack-linux-x64-musl": "0.0.1",
         "@nntoan/gstack-linux-x64-musl-baseline": "0.0.1",
         "@nntoan/gstack-win32-x64": "0.0.1",
-        "@nntoan/gstack-win32-x64-baseline": "0.0.1",
       },
       "peerDependencies": {
         "playwright": ">=1.40.0",
