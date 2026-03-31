@@ -8,6 +8,11 @@ interface PlatformTarget {
   binary: string;
 }
 
+interface ResolvedTarget {
+  dir: string;
+  target: string;
+}
+
 const PLATFORMS: PlatformTarget[] = [
   { dir: 'gstack-darwin-arm64', target: 'bun-darwin-arm64', binary: 'gstack' },
   { dir: 'gstack-darwin-x64', target: 'bun-darwin-x64', binary: 'gstack' },
@@ -22,8 +27,8 @@ const PLATFORMS: PlatformTarget[] = [
   },
   { dir: 'gstack-linux-arm64-musl', target: 'bun-linux-arm64-musl', binary: 'gstack' },
   { dir: 'gstack-linux-x64-musl', target: 'bun-linux-x64-musl', binary: 'gstack' },
-  { dir: 'gstack-win32-x64-baseline', target: 'bun-windows-x64-baseline', binary: 'gstack.exe' },
-  { dir: 'gstack-win32-x64', target: 'bun-windows-x64', binary: 'gstack.exe' },
+  { dir: 'gstack-windows-x64-baseline', target: 'bun-windows-x64-baseline', binary: 'gstack.exe' },
+  { dir: 'gstack-windows-x64', target: 'bun-windows-x64', binary: 'gstack.exe' },
 ];
 
 const ENTRY_POINT = 'src/cli/index.ts';
@@ -34,6 +39,56 @@ function parseTarget(argv: string[]): string | undefined {
     if (argv[i].startsWith('--target=')) return argv[i].slice('--target='.length);
   }
   return undefined;
+}
+
+function resolveTargetAlias(value: string): ResolvedTarget {
+  if (value === 'gstack-win32-x64') {
+    return { dir: 'gstack-windows-x64', target: 'bun-windows-x64' };
+  }
+
+  if (value === 'gstack-win32-x64-baseline') {
+    return { dir: 'gstack-windows-x64-baseline', target: 'bun-windows-x64-baseline' };
+  }
+
+  if (value === 'bun-win32-x64') {
+    return { dir: 'gstack-windows-x64', target: 'bun-windows-x64' };
+  }
+
+  if (value === 'bun-win32-x64-baseline') {
+    return { dir: 'gstack-windows-x64-baseline', target: 'bun-windows-x64-baseline' };
+  }
+
+  return { dir: value, target: value };
+}
+
+function isBaselineTarget(platform: PlatformTarget): boolean {
+  return platform.dir.endsWith('-baseline') || platform.target.endsWith('-baseline');
+}
+
+function resolveBunCachePath(platform: PlatformTarget): string | null {
+  const versionResult = Bun.spawnSync(['bun', '--version'], { stdout: 'pipe', stderr: 'pipe' });
+  if (versionResult.exitCode !== 0) return null;
+  const bunVersion = new TextDecoder().decode(versionResult.stdout).trim();
+  if (!bunVersion) return null;
+
+  const cacheResult = Bun.spawnSync(['bun', 'pm', 'cache'], { stdout: 'pipe', stderr: 'pipe' });
+  if (cacheResult.exitCode !== 0) return null;
+  const cacheDir = new TextDecoder().decode(cacheResult.stdout).trim();
+  if (!cacheDir) return null;
+
+  return path.join(cacheDir, `${platform.target}-v${bunVersion}`);
+}
+
+function clearStaleBaselineCache(platform: PlatformTarget): void {
+  if (!isBaselineTarget(platform)) return;
+
+  const cachePath = resolveBunCachePath(platform);
+  if (!cachePath) return;
+
+  if (fs.existsSync(cachePath)) {
+    fs.rmSync(cachePath, { force: true });
+    process.stderr.write(`[build-platform] cleared stale cache: ${cachePath}\n`);
+  }
 }
 
 function computeFileHash(filePath: string): string {
@@ -47,6 +102,8 @@ function writeSha256File(binaryPath: string): void {
 }
 
 async function buildTarget(platform: PlatformTarget): Promise<void> {
+  clearStaleBaselineCache(platform);
+
   const outfile = path.join('packages', platform.dir, 'bin', platform.binary);
   fs.mkdirSync(path.dirname(outfile), { recursive: true });
 
@@ -85,7 +142,10 @@ async function main(argv: string[]): Promise<void> {
   }
 
   const targets = targetArg
-    ? PLATFORMS.filter((p) => p.target === targetArg || p.dir === targetArg)
+    ? (() => {
+        const resolved = resolveTargetAlias(targetArg);
+        return PLATFORMS.filter((p) => p.target === resolved.target || p.dir === resolved.dir);
+      })()
     : PLATFORMS;
 
   if (targets.length === 0) {

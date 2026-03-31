@@ -1,7 +1,7 @@
 {
-  "name": "@nntoan/gstack-win32-x64",
+  "name": "@nntoan/gstack-windows-x64",
   "version": "0.0.1",
-  "description": "Platform-specific binary for @nntoan/gstack (win32-x64)",
+  "description": "Platform-specific binary for @nntoan/gstack (windows-x64)",
   "license": "MIT",
   "repository": {
     "type": "git",

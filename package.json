@@ -78,7 +78,8 @@
     "@nntoan/gstack-linux-arm64-musl": "0.0.1",
     "@nntoan/gstack-linux-x64-musl": "0.0.1",
     "@nntoan/gstack-linux-x64-musl-baseline": "0.0.1",
-    "@nntoan/gstack-win32-x64": "0.0.1"
+    "@nntoan/gstack-windows-x64": "0.0.1",
+    "@nntoan/gstack-win32-x64": "npm:@nntoan/gstack-windows-x64@0.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",

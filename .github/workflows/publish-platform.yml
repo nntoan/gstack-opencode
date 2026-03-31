@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ${{ startsWith(matrix.platform, 'gstack-win32-') && 'windows-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ startsWith(matrix.platform, 'gstack-windows-') && 'windows-latest' || 'ubuntu-latest' }}
     defaults:
       run:
         shell: bash
@@ -47,8 +47,8 @@ jobs:
           - gstack-linux-arm64-musl
           - gstack-linux-x64-musl
           - gstack-linux-x64-musl-baseline
-          - gstack-win32-x64
-          - gstack-win32-x64-baseline
+          - gstack-windows-x64
+          - gstack-windows-x64-baseline
     steps:
       - uses: actions/checkout@v4
 
@@ -85,14 +85,28 @@ jobs:
           max_attempts: 3
           retry_wait_seconds: 15
           shell: bash
-          command: bun run scripts/build-platform.ts --target=${{ matrix.platform }}
+          command: |
+            PLATFORM="${{ matrix.platform }}"
+
+            if [[ "$PLATFORM" == *-baseline ]]; then
+              TARGET="${PLATFORM#gstack-}"
+              BUN_VERSION=$(bun --version)
+              CACHE_DIR=$(bun pm cache)
+              CACHE_DEST="${CACHE_DIR}/bun-${TARGET}-v${BUN_VERSION}"
+
+              # Baseline target downloads can be cached incompletely and then keep failing retries.
+              # Remove stale cache entry before each retry attempt.
+              rm -f "${CACHE_DEST}"
+            fi
+
+            bun run scripts/build-platform.ts --target=${PLATFORM}
 
       - name: Compress artifact
         if: steps.check.outputs.skip != 'true'
         run: |
           PLATFORM="${{ matrix.platform }}"
           cd packages/${PLATFORM}
-          if [[ "$PLATFORM" == gstack-win32-* ]]; then
+          if [[ "$PLATFORM" == gstack-windows-* ]]; then
             7z a -tzip ../../binary-${PLATFORM}.zip bin/ package.json
           else
             tar -czvf ../../binary-${PLATFORM}.tar.gz bin/ package.json
@@ -127,8 +141,8 @@ jobs:
           - gstack-linux-arm64-musl
           - gstack-linux-x64-musl
           - gstack-linux-x64-musl-baseline
-          - gstack-win32-x64
-          - gstack-win32-x64-baseline
+          - gstack-windows-x64
+          - gstack-windows-x64-baseline
     steps:
       - name: Check if already published
         id: check
@@ -150,25 +164,38 @@ jobs:
           name: binary-${{ matrix.platform }}
           path: .
 
+      - name: Determine artifact presence
+        id: artifact
+        if: steps.check.outputs.skip != 'true'
+        run: |
+          PLATFORM="${{ matrix.platform }}"
+
+          if [[ -f "binary-${PLATFORM}.zip" || -f "binary-${PLATFORM}.tar.gz" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping publish for ${PLATFORM}: artifact missing (likely upstream build failure)."
+          fi
+
       - name: Extract artifact
-        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.artifact.outputs.available == 'true'
         run: |
           PLATFORM="${{ matrix.platform }}"
           mkdir -p packages/${PLATFORM}
-          if [[ "$PLATFORM" == gstack-win32-* ]]; then
+          if [[ "$PLATFORM" == gstack-windows-* ]]; then
             unzip binary-${PLATFORM}.zip -d packages/${PLATFORM}/
           else
             tar -xzvf binary-${PLATFORM}.tar.gz -C packages/${PLATFORM}/
           fi
 
       - uses: actions/setup-node@v4
-        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.artifact.outputs.available == 'true'
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
 
       - name: Publish @nntoan/${{ matrix.platform }}
-        if: steps.check.outputs.skip != 'true' && steps.download.outcome == 'success'
+        if: steps.check.outputs.skip != 'true' && steps.artifact.outputs.available == 'true'
         run: |
           cd packages/${{ matrix.platform }}
           TAG_ARG=""

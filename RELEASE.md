@@ -46,6 +46,12 @@ Before automated releases work, perform the initial publish manually:
 
 5. Push a commit to `main` — Release Please will begin tracking conventional commits.
 
+## Platform Binary Naming
+
+- Windows packages use `windows-*` in package names (e.g. `@nntoan/gstack-windows-x64`).
+- npm platform filtering still relies on `os: ["win32"]` in those package manifests.
+- Legacy `@nntoan/gstack-win32-x64` is retained as an alias to reduce transition breakage.
+
 ## Conventional Commits
 
 We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
