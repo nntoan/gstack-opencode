@@ -9,6 +9,10 @@ function createBaseConfig(): GstackConfig {
     disabled_agents: ['agent-base'],
     disabled_mcps: ['mcp-base'],
     disabled_hooks: ['hook-base'],
+    install_selection: {
+      claude_plan: 'pro',
+      has_openai: false,
+    },
     agents: {
       sisyphus: {
         model: 'base-model',
@@ -86,5 +90,20 @@ describe('mergeConfigs', () => {
     expect(result.backlog.enabled).toBe(false);
     expect(result.backlog.auto_create_tasks).toBe(false);
     expect(result.backlog.auto_update_status).toBe(false);
+  });
+
+  it('deep-merges install_selection fields', () => {
+    const base = createBaseConfig();
+
+    const result = mergeConfigs(base, {
+      install_selection: {
+        has_openai: true,
+        has_gemini: true,
+      },
+    });
+
+    expect(result.install_selection?.claude_plan).toBe('pro');
+    expect(result.install_selection?.has_openai).toBe(true);
+    expect(result.install_selection?.has_gemini).toBe(true);
   });
 });

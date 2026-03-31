@@ -58,6 +58,10 @@ describe('plugin-config', () => {
   "disabled_agents": ["user-agent"],
   "disabled_mcps": ["websearch"],
   "disabled_skills": ["user-skill"],
+  "install_selection": {
+    "claude_plan": "pro",
+    "has_openai": false
+  },
   "backlog": {
     "enabled": true,
     "auto_create_tasks": true,
@@ -80,6 +84,10 @@ describe('plugin-config', () => {
   "disabled_mcps": ["context7"],
   "disabled_skills": ["project-skill"],
   "disabled_hooks": ["hook-project"],
+  "install_selection": {
+    "has_openai": true,
+    "has_gemini": true
+  },
   "agents": {
     "sisyphus": {
       "model": "project-model"
@@ -100,6 +108,9 @@ describe('plugin-config', () => {
     expect(config.disabled_mcps).toEqual(['websearch', 'context7']);
     expect(config.disabled_skills).toEqual(['user-skill', 'project-skill']);
     expect(config.disabled_hooks).toEqual(['hook-project']);
+    expect(config.install_selection?.claude_plan).toBe('pro');
+    expect(config.install_selection?.has_openai).toBe(true);
+    expect(config.install_selection?.has_gemini).toBe(true);
     expect(config.agents?.sisyphus.model).toBe('project-model');
     expect(config.agents?.sisyphus.instructions).toBe('keep-user');
     expect(config.backlog.enabled).toBe(false);

@@ -18,6 +18,38 @@ describe('GstackConfigSchema', () => {
       expect(result.mcp).toBeUndefined();
       expect(result.browser).toBeUndefined();
       expect(result.telemetry).toBeUndefined();
+      expect(result.install_selection).toBeUndefined();
+    });
+  });
+
+  describe('#install selection', () => {
+    it('accepts install selection config', () => {
+      const result = GstackConfigSchema.parse({
+        install_selection: {
+          claude_plan: 'max',
+          has_openai: true,
+          has_gemini: false,
+          has_copilot: true,
+          has_opencode_zen: false,
+          has_zai_coding_plan: true,
+          has_kimi_for_coding: false,
+          has_opencode_go: true,
+        },
+      });
+
+      expect(result.install_selection?.claude_plan).toBe('max');
+      expect(result.install_selection?.has_openai).toBe(true);
+      expect(result.install_selection?.has_zai_coding_plan).toBe(true);
+    });
+
+    it('rejects invalid claude plan values', () => {
+      expect(() =>
+        GstackConfigSchema.parse({
+          install_selection: {
+            claude_plan: 'enterprise',
+          },
+        })
+      ).toThrow();
     });
   });
 

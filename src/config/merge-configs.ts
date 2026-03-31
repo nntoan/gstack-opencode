@@ -5,6 +5,10 @@ export function mergeConfigs(base: GstackConfig, override: Partial<GstackConfig>
   return {
     ...base,
     ...override,
+    install_selection: deepMerge(
+      (base.install_selection ?? {}) as Record<string, unknown>,
+      (override.install_selection ?? {}) as Record<string, unknown>
+    ) as GstackConfig['install_selection'],
     agents: deepMerge(base.agents ?? {}, override.agents ?? {}),
     mcp: deepMerge(base.mcp ?? {}, override.mcp ?? {}),
     disabled_agents: [
