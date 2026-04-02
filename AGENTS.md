@@ -1,73 +1,173 @@
 # AGENTS.md
 
-## Build & Test Commands
+**Generated:** 2025-04-02 | **Commit:** a2bb5d7 | **Branch:** main
 
-- **Build**: `mise run build` or `bun build ./src/index.ts --outdir dist --target bun`
-- **Test**: `mise run test` or `bun test`
-- **Single Test**: `bun test BackgroundTask.test.ts` (use file glob pattern)
-- **Watch Mode**: `bun test --watch`
-- **Lint**: `mise run lint` (eslint)
-- **Fix Lint**: `mise run lint:fix` (eslint --fix)
-- **Format**: `mise run format` (prettier)
+## Overview
 
-## Code Style Guidelines
+OpenCode plugin (`@nntoan/gstack`) + CLI that provides a multi-agent engineering workflow. Ships 13 agents, 25 built-in skills, orchestrator (intent → agent → skill delegation), MCP integrations, browser daemon, and sprint backlog. Bun runtime, TypeScript strict mode, ESM only.
 
-### Imports & Module System
+## Structure
 
-- Use ES6 `import`/`export` syntax (module: "ESNext", type: "module")
-- Group imports: external libraries first, then internal modules
-- Use explicit file extensions (`.ts`) for internal imports
+```
+./
+├── src/
+│   ├── index.ts                  # Plugin entry — composition root
+│   ├── plugin-interface.ts       # Runtime handlers (chat.message, event, tool, config)
+│   ├── plugin-config.ts          # Config loader (~/.config/opencode/gstack.jsonc)
+│   ├── create-skills-and-agents.ts  # Skill + agent factory
+│   ├── create-managers.ts        # Manager aggregate factory
+│   ├── create-tools.ts           # Tool registration (extension point)
+│   ├── create-hooks.ts           # Hook registration (extension point)
+│   ├── types.ts                  # Public type barrel
+│   ├── agents/                   # 13 agent definitions (→ see agents/AGENTS.md)
+│   ├── cli/                      # CLI: install, doctor (→ see cli/AGENTS.md)
+│   ├── config/                   # Config schema + validation (Zod)
+│   ├── features/
+│   │   ├── orchestrator/         # Intent classification + delegation (→ see orchestrator/AGENTS.md)
+│   │   ├── builtin-skills/       # 25 skill definitions (→ see builtin-skills/AGENTS.md)
+│   │   ├── browser-daemon/       # Browser automation server (→ see browser-daemon/AGENTS.md)
+│   │   ├── skill-adapter/        # Skill template resolution + content transformation
+│   │   ├── skill-mcp-manager/    # MCP client lifecycle manager (SkillMcpManager class)
+│   │   ├── sprint-backlog/       # Backlog MCP wrapper + task creators
+│   │   ├── workspace-state/      # Persisted session/boulder/plan state
+│   │   └── analytics/            # Telemetry writers + trackers
+│   ├── mcp/                      # MCP provider adapters (websearch, context7, grep-app, etc.)
+│   ├── plugin-handlers/          # Config + MCP config handlers for OpenCode host
+│   ├── shared/                   # Logger, deep-merge, path helpers
+│   └── types/                    # Core type definitions (agent, skill, config, mcp, orchestrator)
+├── scripts/                      # Build-platform, generate-schema, upstream-sync
+├── schemas/                      # JSON Schema for plugin config
+├── packages/                     # Platform-specific binary packages (darwin, linux, windows)
+└── .github/workflows/            # CI, release-please, publish, publish-platform
+```
 
-### Formatting (Prettier)
+## Where to Look
 
-- **Single quotes** (`singleQuote: true`)
-- **Line width**: 100 characters
-- **Tab width**: 2 spaces
-- **Trailing commas**: ES5 (no trailing commas in function parameters)
-- **Semicolons**: enabled
+| Task                    | Location                                         | Notes                                                                          |
+| ----------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------ |
+| Plugin startup flow     | `src/index.ts`                                   | loadConfig → skills+agents → managers → orchestrator → tools/hooks → interface |
+| Add/modify agent        | `src/agents/{role}.ts`                           | Export from `index.ts`, added to `ALL_AGENTS`                                  |
+| Add/modify skill        | `src/features/builtin-skills/skills/{name}.ts`   | Export from `skills/index.ts`                                                  |
+| Change delegation logic | `src/features/orchestrator/delegation-engine.ts` | Maps intent → phase → agent → skills                                           |
+| Change intent patterns  | `src/features/orchestrator/intent-patterns.ts`   | Phase patterns, skill-to-phase map                                             |
+| CLI commands            | `src/cli/cli-program.ts`                         | Commander-based; add `.command()`                                              |
+| Config schema           | `src/config/schema/`                             | Zod schemas; `bun run generate:schema` regenerates JSON                        |
+| MCP adapters            | `src/mcp/`                                       | Each file = one provider adapter                                               |
+| Browser automation      | `src/features/browser-daemon/`                   | Platform-specific, security-sensitive                                          |
+| Plugin config loading   | `src/plugin-config.ts`                           | Reads `~/.config/opencode/gstack.jsonc`                                        |
 
-### TypeScript & Naming
+## Runtime Wiring (Boot Sequence)
 
-- **NeverNesters**: avoid deeply nested structures. Always exit early.
-- **Strict mode**: enforced (`"strict": true`)
-- **Classes**: PascalCase (e.g., `BackgroundTask`, `BackgroundTaskManager`)
-- **Methods/properties**: camelCase
-- **Status strings**: use union types (e.g., `'pending' | 'running' | 'completed' | 'failed' | 'cancelled'`)
-- **Explicit types**: prefer explicit type annotations over inference
-- **Return types**: optional (not required but recommended for public methods)
+```
+GstackPlugin(ctx)
+  → loadPluginConfig(ctx.directory)
+  → createSkillsAndAgents(config)       // filters by disabled_agents/disabled_skills
+  → createManagers({ctx, config, skills, agents})  // SkillMcpManager + configHandler + sprintBacklog
+  → createOrchestrator({agents, skills, config})
+  → createTools / createHooks           // extension points (currently empty)
+  → createPluginInterface(...)          // returns handler object to OpenCode host
+```
+
+## Commands
+
+```bash
+# Dev
+bun install
+bun run build          # Library → dist/index.js
+bun run build:cli      # CLI → dist/cli.js
+bun run build:all      # Both
+bun run typecheck      # tsc --noEmit
+bun run test           # bun test (vitest API via bun runner)
+bun run lint           # eslint .
+bun run lint:fix       # eslint . --fix
+bun run format         # prettier --write .
+
+# Single test
+bun test {glob}        # e.g. bun test intent-classifier
+
+# Full CI loop
+bun run test && bun run typecheck && bun run lint && bun run build:all
+
+# mise aliases (optional)
+mise run build | test | lint | lint:fix | format
+```
+
+## Code Style
+
+### Imports
+
+- ES6 `import`/`export` only (ESM, `"type": "module"`)
+- Group: external libraries first, then internal
+- **Explicit `.ts` extensions** on internal imports (required for Bun ESM resolution)
+
+### Formatting (Prettier — enforced as lint error)
+
+- Single quotes, semicolons, 100 char width, 2-space indent, ES5 trailing commas, always parens on arrows
+
+### TypeScript
+
+- `strict: true`, target ESNext, bundler module resolution
+- NeverNesters: exit early, avoid deep nesting
+- PascalCase classes, camelCase methods/properties
+- Union types for status strings (not enums)
+- Prefer explicit type annotations over inference
 
 ### Error Handling
 
-- Check error type before accessing error properties: `error instanceof Error ? error.toString() : String(error)`
-- Log errors with `[ERROR]` prefix for consistency
-- Always provide error context when recording output
+- `error instanceof Error ? error.message : String(error)` — always check type
+- `[ERROR]` prefix in log messages
+- Never swallow errors silently (`.catch(() => {})` exists in browser-daemon but is a known tech debt)
 
-### Linting Rules
+### Linting
 
-- `@typescript-eslint/no-explicit-any`: warn (avoid `any` type)
-- `no-console`: error (minimize console logs)
-- `prettier/prettier`: error (formatting violations are errors)
+- `no-console: error` — use `log()` from `shared/logger.ts` instead
+- `@typescript-eslint/no-explicit-any: warn`
+- `prettier/prettier: error`
 
 ## Testing
 
-- Framework: **vitest** with `describe` & `it` blocks
-- Style: Descriptive nested test cases with clear expectations
-- Assertion library: `expect()` (vitest)
+- Runner: `bun test` (Bun test runner, vitest-compatible API)
+- Imports: `import { describe, it, expect } from 'bun:test'` or `from 'vitest'`
+- Pattern: colocated `*.test.ts` next to implementation
+- Mocking: hand-rolled fakes via dependency injection (no mock libraries)
+- FS tests: use `.memory/` or `os.tmpdir()` for isolation, clean up in `afterEach`
+- No vitest.config file — defaults only
 
-## Memory
+## Anti-Patterns (This Project)
 
-- Store temporary data in `.memory/` directory (gitignored)
+- **No `console.*`** — `no-console` is an error; use `log()` from shared/logger
+- **No `as any` / `@ts-ignore`** — one `@ts-expect-error` in tests only
+- **No find-and-replace renaming** — use `gitnexus_rename` (call graph aware)
+- **No edits without impact analysis** — run `gitnexus_impact` first
+- **No shell interpolation of user input** — hardcode command args (see cookie-import-browser.ts)
+- **No force-push, no skipping tests** — enforced in ship/release skills
 
-## Project Context
+## Tooling
 
-- **Type**: ES Module package for Bun modules
-- **Target**: Bun runtime, ES2021+
-- **Purpose**: General-purpose Bun module development
+| Tool           | Version      | Purpose                                     |
+| -------------- | ------------ | ------------------------------------------- |
+| Bun            | 1.3.2 (mise) | Runtime, bundler, test runner               |
+| TypeScript     | ^5.7         | Type checking (`tsc --noEmit`)              |
+| ESLint         | ^9.39        | Linting (flat config)                       |
+| Prettier       | ^3.2         | Formatting                                  |
+| Commander      | ^14.0        | CLI framework                               |
+| Zod            | ^4.1         | Config schema validation                    |
+| MCP SDK        | ^1.25        | Model Context Protocol client               |
+| Playwright     | >=1.40       | Optional peer dep for browser-daemon        |
+| Release Please | CI           | Automated releases via conventional commits |
+
+## Notes
+
+- `create-tools.ts` and `create-hooks.ts` return `{}` — intentional extension stubs
+- Platform binaries built via `scripts/build-platform.ts` → `bun build --compile`
+- Config lives at `~/.config/opencode/gstack.jsonc` — loaded by `plugin-config.ts`
+- `researchs/` is a reference folder — not part of the build/test/lint scope
+- `.memory/` is gitignored scratch space for tests and temp data
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **gstack-opencode** (856 symbols, 2291 relationships, 57 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **gstack-opencode** (965 symbols, 2595 relationships, 66 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 

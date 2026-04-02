@@ -17,9 +17,10 @@ Thank you for your interest in contributing!
 3. Make your changes
 4. Run tests and linting:
    ```bash
-   mise run test
-   mise run lint
+   bun run test
+   bun run lint
    ```
+   > Or with mise: `mise run test` / `mise run lint`
 5. Commit using [Conventional Commits](https://www.conventionalcommits.org/) format:
    - `feat: add new feature`
    - `fix: resolve bug`
@@ -36,6 +37,6 @@ Thank you for your interest in contributing!
 
 ## Code Style
 
-This project uses ESLint and Prettier. Run `mise run lint:fix` to auto-fix issues.
+This project uses ESLint and Prettier. Run `bun run lint:fix` to auto-fix issues (or `mise run lint:fix`).
 
 See [AGENTS.md](./AGENTS.md) for detailed code style guidelines.
