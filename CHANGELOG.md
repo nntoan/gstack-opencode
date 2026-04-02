@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/nntoan/gstack-opencode/compare/v0.4.0...v0.4.1) (2026-04-02)
+
+
+### Bug Fixes
+
+* **ci:** predownload baseline compile target before platform build ([e25874c](https://github.com/nntoan/gstack-opencode/commit/e25874c544f8c248368a6568c0e9d06b3b1332de))
+
 ## [0.4.0](https://github.com/nntoan/gstack-opencode/compare/v0.3.0...v0.4.0) (2026-03-31)
 
 
