@@ -29,7 +29,7 @@ permissions:
 
 jobs:
   build:
-    runs-on: ${{ startsWith(matrix.platform, 'gstack-windows-') && 'windows-latest' || 'ubuntu-latest' }}
+    runs-on: ${{ startsWith(matrix.platform, 'windows-') && 'windows-latest' || 'ubuntu-latest' }}
     defaults:
       run:
         shell: bash
@@ -38,17 +38,17 @@ jobs:
       max-parallel: 12
       matrix:
         platform:
-          - gstack-darwin-arm64
-          - gstack-darwin-x64
-          - gstack-darwin-x64-baseline
-          - gstack-linux-arm64
-          - gstack-linux-x64
-          - gstack-linux-x64-baseline
-          - gstack-linux-arm64-musl
-          - gstack-linux-x64-musl
-          - gstack-linux-x64-musl-baseline
-          - gstack-windows-x64
-          - gstack-windows-x64-baseline
+          - darwin-arm64
+          - darwin-x64
+          - darwin-x64-baseline
+          - linux-arm64
+          - linux-x64
+          - linux-x64-baseline
+          - linux-arm64-musl
+          - linux-x64-musl
+          - linux-x64-musl-baseline
+          - windows-x64
+          - windows-x64-baseline
     steps:
       - uses: actions/checkout@v4
 
@@ -63,7 +63,8 @@ jobs:
         id: check
         run: |
           VERSION="${{ inputs.version }}"
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@nntoan/${{ matrix.platform }}/${VERSION}")
+          PACKAGE="gstack-${{ matrix.platform }}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@nntoan/${PACKAGE}/${VERSION}")
           if [ "$STATUS" = "200" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
@@ -83,7 +84,7 @@ jobs:
         run: |
           BUN_VERSION=$(bun --version)
           PLATFORM="${{ matrix.platform }}"
-          COMPILE_TARGET="${PLATFORM#gstack-}"
+          COMPILE_TARGET="${PLATFORM}"
           PKG_NAME="bun-${COMPILE_TARGET}"
           CACHE_DIR=$(bun pm cache)
           CACHE_DEST="${CACHE_DIR}/${PKG_NAME}-v${BUN_VERSION}"
@@ -134,24 +135,24 @@ jobs:
             PLATFORM="${{ matrix.platform }}"
 
             case "$PLATFORM" in
-              gstack-darwin-arm64) TARGET="bun-darwin-arm64" ;;
-              gstack-darwin-x64) TARGET="bun-darwin-x64" ;;
-              gstack-darwin-x64-baseline) TARGET="bun-darwin-x64-baseline" ;;
-              gstack-linux-arm64) TARGET="bun-linux-arm64" ;;
-              gstack-linux-x64) TARGET="bun-linux-x64" ;;
-              gstack-linux-x64-baseline) TARGET="bun-linux-x64-baseline" ;;
-              gstack-linux-arm64-musl) TARGET="bun-linux-arm64-musl" ;;
-              gstack-linux-x64-musl) TARGET="bun-linux-x64-musl" ;;
-              gstack-linux-x64-musl-baseline) TARGET="bun-linux-x64-musl-baseline" ;;
-              gstack-windows-x64) TARGET="bun-windows-x64" ;;
-              gstack-windows-x64-baseline) TARGET="bun-windows-x64-baseline" ;;
+              darwin-arm64) TARGET="bun-darwin-arm64" ;;
+              darwin-x64) TARGET="bun-darwin-x64" ;;
+              darwin-x64-baseline) TARGET="bun-darwin-x64-baseline" ;;
+              linux-arm64) TARGET="bun-linux-arm64" ;;
+              linux-x64) TARGET="bun-linux-x64" ;;
+              linux-x64-baseline) TARGET="bun-linux-x64-baseline" ;;
+              linux-arm64-musl) TARGET="bun-linux-arm64-musl" ;;
+              linux-x64-musl) TARGET="bun-linux-x64-musl" ;;
+              linux-x64-musl-baseline) TARGET="bun-linux-x64-musl-baseline" ;;
+              windows-x64) TARGET="bun-windows-x64" ;;
+              windows-x64-baseline) TARGET="bun-windows-x64-baseline" ;;
               *)
                 echo "Unknown platform: $PLATFORM"
                 exit 1
                 ;;
             esac
 
-            if [[ "$PLATFORM" == gstack-windows-* ]]; then
+            if [[ "$PLATFORM" == windows-* ]]; then
               OUTPUT="packages/${PLATFORM}/bin/gstack.exe"
             else
               OUTPUT="packages/${PLATFORM}/bin/gstack"
@@ -168,7 +169,7 @@ jobs:
         run: |
           PLATFORM="${{ matrix.platform }}"
           cd packages/${PLATFORM}
-          if [[ "$PLATFORM" == gstack-windows-* ]]; then
+          if [[ "$PLATFORM" == windows-* ]]; then
             7z a -tzip ../../binary-${PLATFORM}.zip bin/ package.json
           else
             tar -czvf ../../binary-${PLATFORM}.tar.gz bin/ package.json
@@ -194,23 +195,24 @@ jobs:
       max-parallel: 4
       matrix:
         platform:
-          - gstack-darwin-arm64
-          - gstack-darwin-x64
-          - gstack-darwin-x64-baseline
-          - gstack-linux-arm64
-          - gstack-linux-x64
-          - gstack-linux-x64-baseline
-          - gstack-linux-arm64-musl
-          - gstack-linux-x64-musl
-          - gstack-linux-x64-musl-baseline
-          - gstack-windows-x64
-          - gstack-windows-x64-baseline
+          - darwin-arm64
+          - darwin-x64
+          - darwin-x64-baseline
+          - linux-arm64
+          - linux-x64
+          - linux-x64-baseline
+          - linux-arm64-musl
+          - linux-x64-musl
+          - linux-x64-musl-baseline
+          - windows-x64
+          - windows-x64-baseline
     steps:
       - name: Check if already published
         id: check
         run: |
           VERSION="${{ inputs.version }}"
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@nntoan/${{ matrix.platform }}/${VERSION}")
+          PACKAGE="gstack-${{ matrix.platform }}"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" "https://registry.npmjs.org/@nntoan/${PACKAGE}/${VERSION}")
           if [ "$STATUS" = "200" ]; then
             echo "skip=true" >> $GITHUB_OUTPUT
           else
@@ -244,7 +246,7 @@ jobs:
         run: |
           PLATFORM="${{ matrix.platform }}"
           mkdir -p packages/${PLATFORM}
-          if [[ "$PLATFORM" == gstack-windows-* ]]; then
+          if [[ "$PLATFORM" == windows-* ]]; then
             unzip binary-${PLATFORM}.zip -d packages/${PLATFORM}/
           else
             tar -xzvf binary-${PLATFORM}.tar.gz -C packages/${PLATFORM}/

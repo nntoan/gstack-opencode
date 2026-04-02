@@ -3,32 +3,60 @@ import * as path from 'node:path';
 import * as crypto from 'node:crypto';
 
 interface PlatformTarget {
-  dir: string;
+  key: string;
   target: string;
   binary: string;
 }
 
 interface ResolvedTarget {
-  dir: string;
+  key: string;
   target: string;
 }
 
+const SHORT_TO_TARGET: Record<string, string> = {
+  'darwin-arm64': 'bun-darwin-arm64',
+  'darwin-x64': 'bun-darwin-x64',
+  'darwin-x64-baseline': 'bun-darwin-x64-baseline',
+  'linux-arm64': 'bun-linux-arm64',
+  'linux-x64': 'bun-linux-x64',
+  'linux-x64-baseline': 'bun-linux-x64-baseline',
+  'linux-arm64-musl': 'bun-linux-arm64-musl',
+  'linux-x64-musl': 'bun-linux-x64-musl',
+  'linux-x64-musl-baseline': 'bun-linux-x64-baseline-musl',
+  'windows-x64': 'bun-windows-x64',
+  'windows-x64-baseline': 'bun-windows-x64-baseline',
+};
+
+const PREFIX_TO_SHORT: Record<string, string> = {
+  'gstack-darwin-arm64': 'darwin-arm64',
+  'gstack-darwin-x64': 'darwin-x64',
+  'gstack-darwin-x64-baseline': 'darwin-x64-baseline',
+  'gstack-linux-arm64': 'linux-arm64',
+  'gstack-linux-x64': 'linux-x64',
+  'gstack-linux-x64-baseline': 'linux-x64-baseline',
+  'gstack-linux-arm64-musl': 'linux-arm64-musl',
+  'gstack-linux-x64-musl': 'linux-x64-musl',
+  'gstack-linux-x64-musl-baseline': 'linux-x64-musl-baseline',
+  'gstack-windows-x64': 'windows-x64',
+  'gstack-windows-x64-baseline': 'windows-x64-baseline',
+};
+
 const PLATFORMS: PlatformTarget[] = [
-  { dir: 'gstack-darwin-arm64', target: 'bun-darwin-arm64', binary: 'gstack' },
-  { dir: 'gstack-darwin-x64', target: 'bun-darwin-x64', binary: 'gstack' },
-  { dir: 'gstack-darwin-x64-baseline', target: 'bun-darwin-x64-baseline', binary: 'gstack' },
-  { dir: 'gstack-linux-x64-baseline', target: 'bun-linux-x64-baseline', binary: 'gstack' },
-  { dir: 'gstack-linux-arm64', target: 'bun-linux-arm64', binary: 'gstack' },
-  { dir: 'gstack-linux-x64', target: 'bun-linux-x64', binary: 'gstack' },
+  { key: 'darwin-arm64', target: 'bun-darwin-arm64', binary: 'gstack' },
+  { key: 'darwin-x64', target: 'bun-darwin-x64', binary: 'gstack' },
+  { key: 'darwin-x64-baseline', target: 'bun-darwin-x64-baseline', binary: 'gstack' },
+  { key: 'linux-x64-baseline', target: 'bun-linux-x64-baseline', binary: 'gstack' },
+  { key: 'linux-arm64', target: 'bun-linux-arm64', binary: 'gstack' },
+  { key: 'linux-x64', target: 'bun-linux-x64', binary: 'gstack' },
   {
-    dir: 'gstack-linux-x64-musl-baseline',
+    key: 'linux-x64-musl-baseline',
     target: 'bun-linux-x64-baseline-musl',
     binary: 'gstack',
   },
-  { dir: 'gstack-linux-arm64-musl', target: 'bun-linux-arm64-musl', binary: 'gstack' },
-  { dir: 'gstack-linux-x64-musl', target: 'bun-linux-x64-musl', binary: 'gstack' },
-  { dir: 'gstack-windows-x64-baseline', target: 'bun-windows-x64-baseline', binary: 'gstack.exe' },
-  { dir: 'gstack-windows-x64', target: 'bun-windows-x64', binary: 'gstack.exe' },
+  { key: 'linux-arm64-musl', target: 'bun-linux-arm64-musl', binary: 'gstack' },
+  { key: 'linux-x64-musl', target: 'bun-linux-x64-musl', binary: 'gstack' },
+  { key: 'windows-x64-baseline', target: 'bun-windows-x64-baseline', binary: 'gstack.exe' },
+  { key: 'windows-x64', target: 'bun-windows-x64', binary: 'gstack.exe' },
 ];
 
 const ENTRY_POINT = 'src/cli/index.ts';
@@ -42,27 +70,22 @@ function parseTarget(argv: string[]): string | undefined {
 }
 
 function resolveTargetAlias(value: string): ResolvedTarget {
-  if (value === 'gstack-win32-x64') {
-    return { dir: 'gstack-windows-x64', target: 'bun-windows-x64' };
+  const normalized = PREFIX_TO_SHORT[value] ?? value;
+
+  if (SHORT_TO_TARGET[normalized]) {
+    return { key: normalized, target: SHORT_TO_TARGET[normalized] };
   }
 
-  if (value === 'gstack-win32-x64-baseline') {
-    return { dir: 'gstack-windows-x64-baseline', target: 'bun-windows-x64-baseline' };
+  const byTarget = Object.entries(SHORT_TO_TARGET).find(([, target]) => target === value);
+  if (byTarget) {
+    return { key: byTarget[0], target: byTarget[1] };
   }
 
-  if (value === 'bun-win32-x64') {
-    return { dir: 'gstack-windows-x64', target: 'bun-windows-x64' };
-  }
-
-  if (value === 'bun-win32-x64-baseline') {
-    return { dir: 'gstack-windows-x64-baseline', target: 'bun-windows-x64-baseline' };
-  }
-
-  return { dir: value, target: value };
+  return { key: normalized, target: value };
 }
 
 function isBaselineTarget(platform: PlatformTarget): boolean {
-  return platform.dir.endsWith('-baseline') || platform.target.endsWith('-baseline');
+  return platform.key.endsWith('-baseline') || platform.target.endsWith('-baseline');
 }
 
 function resolveBunCachePath(platform: PlatformTarget): string | null {
@@ -104,7 +127,8 @@ function writeSha256File(binaryPath: string): void {
 async function buildTarget(platform: PlatformTarget): Promise<void> {
   clearStaleBaselineCache(platform);
 
-  const outfile = path.join('packages', platform.dir, 'bin', platform.binary);
+  const packageDir = platform.key;
+  const outfile = path.join('packages', packageDir, 'bin', platform.binary);
   fs.mkdirSync(path.dirname(outfile), { recursive: true });
 
   const result = Bun.spawnSync(
@@ -122,7 +146,7 @@ async function buildTarget(platform: PlatformTarget): Promise<void> {
 
   if (result.exitCode !== 0) {
     const errText = result.stderr ? new TextDecoder().decode(result.stderr) : 'unknown error';
-    throw new Error(`build failed for ${platform.dir} (exit ${result.exitCode}): ${errText}`);
+    throw new Error(`build failed for ${platform.key} (exit ${result.exitCode}): ${errText}`);
   }
 
   if (!fs.existsSync(outfile)) {
@@ -130,7 +154,7 @@ async function buildTarget(platform: PlatformTarget): Promise<void> {
   }
 
   writeSha256File(outfile);
-  process.stderr.write(`[build-platform] ${platform.dir} → ${outfile}\n`);
+  process.stderr.write(`[build-platform] ${platform.key} → ${outfile}\n`);
 }
 
 async function main(argv: string[]): Promise<void> {
@@ -144,7 +168,7 @@ async function main(argv: string[]): Promise<void> {
   const targets = targetArg
     ? (() => {
         const resolved = resolveTargetAlias(targetArg);
-        return PLATFORMS.filter((p) => p.target === resolved.target || p.dir === resolved.dir);
+        return PLATFORMS.filter((p) => p.target === resolved.target || p.key === resolved.key);
       })()
     : PLATFORMS;
 
@@ -161,7 +185,7 @@ async function main(argv: string[]): Promise<void> {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`[build-platform] ERROR: ${msg}\n`);
-      failures.push(platform.dir);
+      failures.push(platform.key);
     }
   }
 
