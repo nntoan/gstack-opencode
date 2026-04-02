@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/nntoan/gstack-opencode/compare/v0.3.0...v0.4.0) (2026-03-31)
+
+
+### Features
+
+* **install:** adopt provider-based fallback model setup ([8c57156](https://github.com/nntoan/gstack-opencode/commit/8c57156be3890e48026c8cccbcd246ffb1956a24))
+
+
+### Bug Fixes
+
+* **plugin:** register gstack agents in OpenCode and globalize install config ([eef23fa](https://github.com/nntoan/gstack-opencode/commit/eef23fa6fe17178766ddf25f0bbf230931682860))
+* **release:** harden windows baseline binary build and rename platform packages ([e52dc01](https://github.com/nntoan/gstack-opencode/commit/e52dc011159a11e0a9c50e94ee21a62c4ea503f5))
+
 ## [0.3.0](https://github.com/nntoan/gstack-opencode/compare/v0.2.0...v0.3.0) (2026-03-24)
 
 
