@@ -77,29 +77,91 @@ jobs:
           jq --arg v "$VERSION" '.version = $v' packages/${{ matrix.platform }}/package.json > tmp.json
           mv tmp.json packages/${{ matrix.platform }}/package.json
 
+      - name: Pre-download baseline compile target
+        if: steps.check.outputs.skip != 'true' && endsWith(matrix.platform, '-baseline')
+        shell: bash
+        run: |
+          BUN_VERSION=$(bun --version)
+          PLATFORM="${{ matrix.platform }}"
+          COMPILE_TARGET="${PLATFORM#gstack-}"
+          PKG_NAME="bun-${COMPILE_TARGET}"
+          CACHE_DIR=$(bun pm cache)
+          CACHE_DEST="${CACHE_DIR}/${PKG_NAME}-v${BUN_VERSION}"
+
+          if [[ -f "$CACHE_DEST" ]]; then
+            echo "✓ Compile target already cached at ${CACHE_DEST}"
+            exit 0
+          fi
+
+          echo "Pre-downloading ${PKG_NAME} v${BUN_VERSION} to ${CACHE_DEST}"
+          TARBALL_URL="https://registry.npmjs.org/@oven/${PKG_NAME}/-/${PKG_NAME}-${BUN_VERSION}.tgz"
+          echo "URL: ${TARBALL_URL}"
+
+          mkdir -p "$(dirname "$CACHE_DEST")"
+          TMP_DIR=$(mktemp -d)
+
+          curl -fsSL --retry 5 --retry-delay 5 "${TARBALL_URL}" | tar -xzf - -C "${TMP_DIR}"
+
+          if [[ "$COMPILE_TARGET" == windows-* ]]; then
+            BIN_NAME="bun.exe"
+          else
+            BIN_NAME="bun"
+          fi
+
+          if [[ -f "${TMP_DIR}/package/bin/${BIN_NAME}" ]]; then
+            cp "${TMP_DIR}/package/bin/${BIN_NAME}" "${CACHE_DEST}"
+          elif [[ -f "${TMP_DIR}/package/${BIN_NAME}" ]]; then
+            cp "${TMP_DIR}/package/${BIN_NAME}" "${CACHE_DEST}"
+          else
+            echo "Could not find ${BIN_NAME} in tarball; listing files:"
+            find "${TMP_DIR}" -type f
+            exit 1
+          fi
+
+          chmod +x "${CACHE_DEST}" 2>/dev/null || true
+          echo "✓ Pre-downloaded to ${CACHE_DEST}"
+          ls -lh "${CACHE_DEST}"
+
       - name: Build binary
         if: steps.check.outputs.skip != 'true'
         uses: nick-fields/retry@v3
         with:
-          timeout_minutes: 10
-          max_attempts: 3
+          timeout_minutes: 15
+          max_attempts: 5
           retry_wait_seconds: 15
           shell: bash
           command: |
             PLATFORM="${{ matrix.platform }}"
 
-            if [[ "$PLATFORM" == *-baseline ]]; then
-              TARGET="${PLATFORM#gstack-}"
-              BUN_VERSION=$(bun --version)
-              CACHE_DIR=$(bun pm cache)
-              CACHE_DEST="${CACHE_DIR}/bun-${TARGET}-v${BUN_VERSION}"
+            case "$PLATFORM" in
+              gstack-darwin-arm64) TARGET="bun-darwin-arm64" ;;
+              gstack-darwin-x64) TARGET="bun-darwin-x64" ;;
+              gstack-darwin-x64-baseline) TARGET="bun-darwin-x64-baseline" ;;
+              gstack-linux-arm64) TARGET="bun-linux-arm64" ;;
+              gstack-linux-x64) TARGET="bun-linux-x64" ;;
+              gstack-linux-x64-baseline) TARGET="bun-linux-x64-baseline" ;;
+              gstack-linux-arm64-musl) TARGET="bun-linux-arm64-musl" ;;
+              gstack-linux-x64-musl) TARGET="bun-linux-x64-musl" ;;
+              gstack-linux-x64-musl-baseline) TARGET="bun-linux-x64-musl-baseline" ;;
+              gstack-windows-x64) TARGET="bun-windows-x64" ;;
+              gstack-windows-x64-baseline) TARGET="bun-windows-x64-baseline" ;;
+              *)
+                echo "Unknown platform: $PLATFORM"
+                exit 1
+                ;;
+            esac
 
-              # Baseline target downloads can be cached incompletely and then keep failing retries.
-              # Remove stale cache entry before each retry attempt.
-              rm -f "${CACHE_DEST}"
+            if [[ "$PLATFORM" == gstack-windows-* ]]; then
+              OUTPUT="packages/${PLATFORM}/bin/gstack.exe"
+            else
+              OUTPUT="packages/${PLATFORM}/bin/gstack"
             fi
 
-            bun run scripts/build-platform.ts --target=${PLATFORM}
+            mkdir -p "$(dirname "$OUTPUT")"
+            bun build src/cli/index.ts --compile --minify --target="$TARGET" --outfile="$OUTPUT"
+
+            echo "Built binary:"
+            ls -lh "$OUTPUT"
 
       - name: Compress artifact
         if: steps.check.outputs.skip != 'true'
