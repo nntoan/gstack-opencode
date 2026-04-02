@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/nntoan/gstack-opencode/compare/v0.4.1...v0.4.2) (2026-04-02)
+
+
+### Bug Fixes
+
+* **cli:** bind install prompt writer to stdout stream ([5a7a890](https://github.com/nntoan/gstack-opencode/commit/5a7a8904315557be5ce1d0ff99431a65bcf8d927))
+
 ## [0.4.1](https://github.com/nntoan/gstack-opencode/compare/v0.4.0...v0.4.1) (2026-04-02)
 
 
