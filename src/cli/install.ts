@@ -106,7 +106,7 @@ export async function runInstallWithOptions(options: InstallOptions): Promise<In
   if (options.promptForSelection && options.stdin) {
     selection = await promptInstallSelection(
       {
-        write: options.stdout.write,
+        write: options.stdout.write.bind(options.stdout),
         read: options.stdin.read,
       },
       initialSelection

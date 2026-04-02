@@ -185,6 +185,33 @@ describe('runInstallWithOptions', () => {
     expect((agents.ceo as Record<string, unknown>).model).toBe('anthropic/claude-opus-4-6');
   });
 
+  it('supports interactive prompts when stdout.write needs method binding', async () => {
+    const root: string = createTempRoot('install-interactive-bound-stdout');
+    const homeDir: string = path.join(root, 'home');
+    mkdirSync(homeDir, { recursive: true });
+
+    const stdout = {
+      chunks: [] as string[],
+      write(this: { chunks: string[] }, chunk: string): boolean {
+        this.chunks.push(chunk);
+        return true;
+      },
+    };
+
+    await runInstallWithOptions({
+      homeDir,
+      stdout,
+      promptForSelection: true,
+      defaultSelection: getDefaultInstallSelection(),
+      stdin: {
+        read: createReader(['max', 'yes', 'yes', 'yes', 'yes', 'no', 'no', 'yes']),
+      },
+    });
+
+    expect(stdout.chunks.length).toBeGreaterThan(0);
+    expect(stdout.chunks.join('')).toContain('gstack install completed successfully');
+  });
+
   it('supports non-interactive CLI-style selection defaults', async () => {
     const root: string = createTempRoot('install-non-interactive-selection');
     const homeDir: string = path.join(root, 'home');
