@@ -1,6 +1,6 @@
 {
   "name": "@nntoan/gstack",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Use Garry Tan's exact OpenCode setup: 15 opinionated tools that serve as CEO, Designer, Eng Manager, Release Manager, Doc Engineer, and QA",
   "author": {
     "name": "Toan Nguyen",
