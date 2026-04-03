@@ -1,10 +1,9 @@
-import type { StdioMcpConfig } from './types.ts';
+import type { LocalMcpConfig } from './types.ts';
 
-export function createBacklogMdConfig(): StdioMcpConfig {
+export function createBacklogMdConfig(): LocalMcpConfig {
   return {
-    type: 'stdio' as const,
-    command: 'npx',
-    args: ['backlog-md'],
+    type: 'local' as const,
+    command: ['npx', '-y', 'backlog', 'mcp', 'start'],
     enabled: true,
   };
 }

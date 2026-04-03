@@ -4,11 +4,11 @@ import { grep_app } from './grep-app.ts';
 import { createContexthubConfig } from './contexthub.ts';
 import { createBacklogMdConfig } from './backlog-md.ts';
 import type { GstackConfig } from '../types/config.ts';
-import type { RemoteMcpConfig, StdioMcpConfig } from './types.ts';
+import type { LocalMcpConfig, RemoteMcpConfig, StdioMcpConfig } from './types.ts';
 
 export { McpNameSchema, type McpName } from './types.ts';
 
-type McpServerConfig = RemoteMcpConfig | StdioMcpConfig;
+type McpServerConfig = RemoteMcpConfig | StdioMcpConfig | LocalMcpConfig;
 
 export function createBuiltinMcps(
   disabledMcps: string[] = [],

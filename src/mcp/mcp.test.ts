@@ -31,10 +31,10 @@ describe('createBuiltinMcps', () => {
     expect(Object.keys(mcps)).toHaveLength(0);
   });
 
-  it('contexthub and backlog_md use stdio type', () => {
+  it('contexthub and backlog_md use local type', () => {
     const mcps = createBuiltinMcps([]);
-    expect(mcps.contexthub.type).toBe('stdio');
-    expect(mcps.backlog_md.type).toBe('stdio');
+    expect(mcps.contexthub.type).toBe('local');
+    expect(mcps.backlog_md.type).toBe('local');
   });
 
   it('context7 and grep_app use remote type', () => {
@@ -65,19 +65,17 @@ describe('createBuiltinMcps', () => {
     }
   });
 
-  it('contexthub uses npx command with correct args', () => {
+  it('contexthub uses local command array', () => {
     const mcps = createBuiltinMcps([]);
-    if (mcps.contexthub.type === 'stdio') {
-      expect(mcps.contexthub.command).toBe('npx');
-      expect(mcps.contexthub.args).toEqual(['contexthub']);
+    if (mcps.contexthub.type === 'local') {
+      expect(mcps.contexthub.command).toEqual(['npx', '-y', '@aisuite/chub']);
     }
   });
 
-  it('backlog_md uses npx command with correct args', () => {
+  it('backlog_md uses local command array', () => {
     const mcps = createBuiltinMcps([]);
-    if (mcps.backlog_md.type === 'stdio') {
-      expect(mcps.backlog_md.command).toBe('npx');
-      expect(mcps.backlog_md.args).toEqual(['backlog-md']);
+    if (mcps.backlog_md.type === 'local') {
+      expect(mcps.backlog_md.command).toEqual(['npx', '-y', 'backlog', 'mcp', 'start']);
     }
   });
 

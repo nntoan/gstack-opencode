@@ -16,7 +16,7 @@ export interface ManagedClient {
   client: Client;
   skillName: string;
   lastUsedAt: number;
-  connectionType: 'stdio' | 'remote';
+  connectionType: 'local' | 'stdio' | 'remote';
 }
 
 export interface SkillMcpManagerState {

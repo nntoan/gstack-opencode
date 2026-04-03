@@ -29,3 +29,11 @@ export type StdioMcpConfig = {
   enabled: boolean;
   env?: Record<string, string>;
 };
+
+export type LocalMcpConfig = {
+  type: 'local';
+  command: string[];
+  enabled: boolean;
+  environment?: Record<string, string>;
+  timeout?: number;
+};

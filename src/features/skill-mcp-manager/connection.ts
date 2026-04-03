@@ -9,10 +9,27 @@ function createTransport(
   config: McpServerConfig
 ): StdioClientTransport | StreamableHTTPClientTransport {
   if (config.type === 'stdio') {
-    if (!config.command) {
+    if (!config.command || Array.isArray(config.command)) {
       throw new Error('MCP stdio config requires command');
     }
-    return new StdioClientTransport({ command: config.command, args: config.args });
+    return new StdioClientTransport({
+      command: config.command,
+      args: config.args,
+      env: config.env,
+    });
+  }
+
+  if (config.type === 'local') {
+    if (!config.command || !Array.isArray(config.command) || config.command.length === 0) {
+      throw new Error('MCP local config requires non-empty command array');
+    }
+
+    const [command, ...args] = config.command;
+    return new StdioClientTransport({
+      command,
+      args,
+      env: config.environment,
+    });
   }
 
   if (!config.url) {

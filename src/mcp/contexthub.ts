@@ -1,10 +1,9 @@
-import type { StdioMcpConfig } from './types.ts';
+import type { LocalMcpConfig } from './types.ts';
 
-export function createContexthubConfig(): StdioMcpConfig {
+export function createContexthubConfig(): LocalMcpConfig {
   return {
-    type: 'stdio' as const,
-    command: 'npx',
-    args: ['contexthub'],
+    type: 'local' as const,
+    command: ['npx', '-y', '@aisuite/chub'],
     enabled: true,
   };
 }
