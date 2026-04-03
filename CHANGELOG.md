@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/nntoan/gstack-opencode/compare/v0.4.2...v0.4.3) (2026-04-03)
+
+
+### Bug Fixes
+
+* **cli:** apply installer model presets consistently ([cf7dda1](https://github.com/nntoan/gstack-opencode/commit/cf7dda105822179f87449e51b016355517b12746))
+
 ## [0.4.2](https://github.com/nntoan/gstack-opencode/compare/v0.4.1...v0.4.2) (2026-04-02)
 
 
