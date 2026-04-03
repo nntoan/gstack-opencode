@@ -5,31 +5,6 @@ import { parse as parseJsonc } from 'jsonc-parser';
 import { runInstallWithOptions } from './install.ts';
 import { getDefaultInstallSelection } from './model-defaults.ts';
 
-function createReader(answers: string[]): () => Promise<string> {
-  let index = 0;
-  return async (): Promise<string> => {
-    const answer = answers[index] ?? '';
-    index += 1;
-    return answer;
-  };
-}
-
-interface MemoryWriter {
-  chunks: string[];
-  write: (chunk: string) => boolean;
-}
-
-function createWriter(): MemoryWriter {
-  const chunks: string[] = [];
-  return {
-    chunks,
-    write(chunk: string): boolean {
-      chunks.push(chunk);
-      return true;
-    },
-  };
-}
-
 function createTempRoot(name: string): string {
   const root = path.join(process.cwd(), '.memory', 'tests', name);
   rmSync(root, { recursive: true, force: true });
@@ -48,26 +23,43 @@ describe('runInstallWithOptions', () => {
 
     mkdirSync(homeDir, { recursive: true });
 
-    const stdout = createWriter();
+    const result = await runInstallWithOptions({
+      homeDir,
+      defaultSelection: getDefaultInstallSelection(),
+    });
+
+    expect(result).not.toBeNull();
+
+    const configPath: string = path.join(homeDir, '.config', 'opencode', 'gstack.jsonc');
+    expect(existsSync(configPath)).toBe(true);
+
+    const content: string = await Bun.file(configPath).text();
+    const parsed = parseJsonc(content) as Record<string, unknown>;
+    const agents = parsed.agents as Record<string, unknown>;
+
+    expect(agents.ceo).toBeDefined();
+    expect((agents.ceo as Record<string, unknown>).model).toBe('opencode/gpt-5-nano');
+  });
+
+  it('does not include install_selection in generated config', async () => {
+    const root: string = createTempRoot('install-no-install-selection');
+    const homeDir: string = path.join(root, 'home');
+
+    mkdirSync(homeDir, { recursive: true });
+
     await runInstallWithOptions({
       homeDir,
-      stdout,
       defaultSelection: getDefaultInstallSelection(),
     });
 
     const configPath: string = path.join(homeDir, '.config', 'opencode', 'gstack.jsonc');
-    expect(existsSync(configPath)).toBe(true);
-    expect(stdout.chunks.join('')).toContain('Created global config');
-
     const content: string = await Bun.file(configPath).text();
     const parsed = parseJsonc(content) as Record<string, unknown>;
-    const installSelection = parsed.install_selection as Record<string, unknown>;
-    const agents = parsed.agents as Record<string, unknown>;
 
-    expect(installSelection).toBeDefined();
-    expect(installSelection.claude_plan).toBe('none');
-    expect(agents.ceo).toBeDefined();
-    expect((agents.ceo as Record<string, unknown>).model).toBe('opencode/gpt-5-nano');
+    expect(parsed.install_selection).toBeUndefined();
+    expect(parsed.orchestration_mode).toBeUndefined();
+    expect(parsed.disabled_agents).toBeUndefined();
+    expect(parsed.disabled_skills).toBeUndefined();
   });
 
   it('adds @nntoan/gstack to global plugin list if missing', async () => {
@@ -81,10 +73,8 @@ describe('runInstallWithOptions', () => {
       'utf-8'
     );
 
-    const stdout = createWriter();
     await runInstallWithOptions({
       homeDir,
-      stdout,
       defaultSelection: getDefaultInstallSelection(),
     });
 
@@ -103,10 +93,8 @@ describe('runInstallWithOptions', () => {
     mkdirSync(cwd, { recursive: true });
     mkdirSync(homeDir, { recursive: true });
 
-    const stdout = createWriter();
     await runInstallWithOptions({
       homeDir,
-      stdout,
       defaultSelection: getDefaultInstallSelection(),
     });
 
@@ -124,9 +112,6 @@ describe('runInstallWithOptions', () => {
       configPath,
       `{
   "orchestration_mode": "skills-only",
-  "install_selection": {
-    "claude_plan": "max"
-  },
   "agents": {
     "builder": {
       "model": "custom/model"
@@ -136,91 +121,27 @@ describe('runInstallWithOptions', () => {
       'utf-8'
     );
 
-    const stdout = createWriter();
     await runInstallWithOptions({
       homeDir,
-      stdout,
       defaultSelection: getDefaultInstallSelection(),
     });
 
     const mergedRaw: string = await Bun.file(configPath).text();
     const merged = parseJsonc(mergedRaw) as Record<string, unknown>;
-    const installSelection = merged.install_selection as Record<string, unknown>;
     const agents = merged.agents as Record<string, unknown>;
 
     expect(merged.orchestration_mode).toBe('skills-only');
-    expect(installSelection.claude_plan).toBe('max');
     expect((agents.builder as Record<string, unknown>).model).toBe('custom/model');
     expect(agents.ceo).toBeDefined();
   });
 
-  it('supports interactive provider selection and persists generated defaults', async () => {
-    const root: string = createTempRoot('install-interactive-selection');
-    const homeDir: string = path.join(root, 'home');
-    mkdirSync(homeDir, { recursive: true });
-
-    const stdout = createWriter();
-    await runInstallWithOptions({
-      homeDir,
-      stdout,
-      promptForSelection: true,
-      defaultSelection: getDefaultInstallSelection(),
-      stdin: {
-        read: createReader(['max', 'yes', 'yes', 'yes', 'yes', 'no', 'no', 'yes']),
-      },
-    });
-
-    const configPath: string = path.join(homeDir, '.config', 'opencode', 'gstack.jsonc');
-    const raw = await Bun.file(configPath).text();
-    const parsed = parseJsonc(raw) as Record<string, unknown>;
-    const installSelection = parsed.install_selection as Record<string, unknown>;
-    const agents = parsed.agents as Record<string, unknown>;
-
-    expect(installSelection.claude_plan).toBe('max');
-    expect(installSelection.has_openai).toBe(true);
-    expect(installSelection.has_gemini).toBe(true);
-    expect(installSelection.has_copilot).toBe(true);
-    expect(installSelection.has_opencode_zen).toBe(true);
-    expect(installSelection.has_opencode_go).toBe(true);
-    expect((agents.ceo as Record<string, unknown>).model).toBe('anthropic/claude-opus-4-6');
-  });
-
-  it('supports interactive prompts when stdout.write needs method binding', async () => {
-    const root: string = createTempRoot('install-interactive-bound-stdout');
-    const homeDir: string = path.join(root, 'home');
-    mkdirSync(homeDir, { recursive: true });
-
-    const stdout = {
-      chunks: [] as string[],
-      write(this: { chunks: string[] }, chunk: string): boolean {
-        this.chunks.push(chunk);
-        return true;
-      },
-    };
-
-    await runInstallWithOptions({
-      homeDir,
-      stdout,
-      promptForSelection: true,
-      defaultSelection: getDefaultInstallSelection(),
-      stdin: {
-        read: createReader(['max', 'yes', 'yes', 'yes', 'yes', 'no', 'no', 'yes']),
-      },
-    });
-
-    expect(stdout.chunks.length).toBeGreaterThan(0);
-    expect(stdout.chunks.join('')).toContain('gstack install completed successfully');
-  });
-
-  it('supports non-interactive CLI-style selection defaults', async () => {
+  it('supports non-interactive selection defaults', async () => {
     const root: string = createTempRoot('install-non-interactive-selection');
     const homeDir: string = path.join(root, 'home');
     mkdirSync(homeDir, { recursive: true });
 
-    const stdout = createWriter();
-    await runInstallWithOptions({
+    const result = await runInstallWithOptions({
       homeDir,
-      stdout,
       defaultSelection: {
         claudePlan: 'none',
         hasOpenAI: true,
@@ -231,17 +152,101 @@ describe('runInstallWithOptions', () => {
         hasKimiForCoding: false,
         hasOpencodeGo: true,
       },
-      promptForSelection: false,
+      tui: false,
     });
+
+    expect(result).not.toBeNull();
 
     const configPath: string = path.join(homeDir, '.config', 'opencode', 'gstack.jsonc');
     const raw = await Bun.file(configPath).text();
     const parsed = parseJsonc(raw) as Record<string, unknown>;
-    const installSelection = parsed.install_selection as Record<string, unknown>;
     const agents = parsed.agents as Record<string, unknown>;
 
-    expect(installSelection.has_openai).toBe(true);
-    expect(installSelection.has_opencode_go).toBe(true);
     expect((agents.ceo as Record<string, unknown>).model).toBe('openai/gpt-5.4');
+  });
+
+  it('overwrites generated agent models when explicit selection is provided', async () => {
+    const root: string = createTempRoot('install-overwrite-agent-models');
+    const homeDir: string = path.join(root, 'home');
+    mkdirSync(path.join(homeDir, '.config', 'opencode'), { recursive: true });
+
+    const configPath: string = path.join(homeDir, '.config', 'opencode', 'gstack.jsonc');
+    writeFileSync(
+      configPath,
+      JSON.stringify(
+        {
+          agents: {
+            ceo: { model: 'openai/gpt-5.4' },
+          },
+        },
+        null,
+        2
+      ),
+      'utf-8'
+    );
+
+    await runInstallWithOptions({
+      homeDir,
+      defaultSelection: {
+        claudePlan: 'none',
+        hasOpenAI: false,
+        hasGemini: false,
+        hasCopilot: true,
+        hasOpencodeZen: false,
+        hasZaiCodingPlan: false,
+        hasKimiForCoding: false,
+        hasOpencodeGo: false,
+      },
+      tui: false,
+      overwriteAgentModels: true,
+    });
+
+    const raw = await Bun.file(configPath).text();
+    const parsed = parseJsonc(raw) as Record<string, unknown>;
+    const agents = parsed.agents as Record<string, unknown>;
+    expect((agents.ceo as Record<string, unknown>).model).toBe('github-copilot/claude-opus-4.6');
+  });
+
+  it('writes to existing gstack.json when jsonc does not exist', async () => {
+    const root: string = createTempRoot('install-json-fallback-write');
+    const homeDir: string = path.join(root, 'home');
+    const configDir = path.join(homeDir, '.config', 'opencode');
+    mkdirSync(configDir, { recursive: true });
+
+    const jsonPath = path.join(configDir, 'gstack.json');
+    writeFileSync(
+      jsonPath,
+      JSON.stringify({ agents: { builder: { model: 'custom/model' } } }, null, 2)
+    );
+
+    await runInstallWithOptions({
+      homeDir,
+      defaultSelection: getDefaultInstallSelection(),
+      tui: false,
+    });
+
+    const jsoncPath = path.join(configDir, 'gstack.jsonc');
+    expect(existsSync(jsoncPath)).toBe(false);
+
+    const raw = await Bun.file(jsonPath).text();
+    const parsed = parseJsonc(raw) as Record<string, unknown>;
+    const agents = parsed.agents as Record<string, unknown>;
+    expect((agents.builder as Record<string, unknown>).model).toBe('custom/model');
+    expect(agents.ceo).toBeDefined();
+  });
+
+  it('returns null when tui is enabled but user would cancel (non-tty env)', async () => {
+    const root: string = createTempRoot('install-cancel-non-tty');
+    const homeDir: string = path.join(root, 'home');
+    mkdirSync(homeDir, { recursive: true });
+
+    const result = await runInstallWithOptions({
+      homeDir,
+      defaultSelection: getDefaultInstallSelection(),
+      tui: false,
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.selection).toEqual(getDefaultInstallSelection());
   });
 });

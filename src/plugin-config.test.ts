@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { loadConfigFromPath, loadPluginConfig, parseConfigPartially } from './plugin-config.ts';
 
 function writeConfigFile(filePath: string, content: string): void {
@@ -165,5 +165,57 @@ describe('plugin-config', () => {
     expect(partial?.disabled_mcps).toBeUndefined();
     expect(partial?.backlog?.enabled).toBe(false);
     expect(partial?.browser).toBeUndefined();
+  });
+
+  it('falls back to os.homedir when HOME is not set', () => {
+    const fakeHome = path.join(tempDir, 'fake-home');
+    writeConfigFile(
+      path.join(fakeHome, '.config', 'opencode', 'gstack.jsonc'),
+      `{
+  "agents": {
+    "ceo": { "model": "custom/homedir-model" }
+  }
+}`
+    );
+
+    const homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+
+    try {
+      delete process.env.HOME;
+
+      const projectDir = path.join(tempDir, 'project-homedir-fallback');
+      fs.mkdirSync(projectDir, { recursive: true });
+
+      const config = loadPluginConfig(projectDir, null);
+      expect(config.agents?.ceo?.model).toBe('custom/homedir-model');
+    } finally {
+      homedirSpy.mockRestore();
+    }
+  });
+
+  it('falls back to os.homedir when HOME is empty string', () => {
+    const fakeHome = path.join(tempDir, 'fake-home-empty');
+    writeConfigFile(
+      path.join(fakeHome, '.config', 'opencode', 'gstack.jsonc'),
+      `{
+  "agents": {
+    "ceo": { "model": "custom/homedir-empty-model" }
+  }
+}`
+    );
+
+    const homedirSpy = vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+
+    try {
+      process.env.HOME = '';
+
+      const projectDir = path.join(tempDir, 'project-homedir-empty-fallback');
+      fs.mkdirSync(projectDir, { recursive: true });
+
+      const config = loadPluginConfig(projectDir, null);
+      expect(config.agents?.ceo?.model).toBe('custom/homedir-empty-model');
+    } finally {
+      homedirSpy.mockRestore();
+    }
   });
 });

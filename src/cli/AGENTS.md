@@ -11,7 +11,8 @@ cli/
 ├── install.ts                  # runInstall — config generation + plugin registration
 ├── install-options.ts          # CLI flag parsing for install
 ├── install-config-template.ts  # JSONC template for gstack.jsonc
-├── install-selection-prompts.ts  # Interactive provider selection (stdin prompts)
+├── install-selection-prompts.ts  # Interactive provider selection (@clack/prompts)
+├── detect-existing-config.ts   # Existing config detection for prompt defaults
 ├── model-defaults.ts           # Default model fallback chains per provider
 ├── model-default-chains.ts     # Provider → model chain resolution
 ├── model-id-transform.ts       # Model ID normalization
@@ -37,7 +38,7 @@ cli/
 
 - CLI is a separate build target (`bun run build:cli` → `dist/cli.js`)
 - Install writes to `~/.config/opencode/` — always uses `process.env.HOME`
-- Interactive prompts are abstracted via `install-selection-prompts.ts` — tests inject fake stdin readers
+- Interactive prompts are handled with `@clack/prompts` in `install-selection-prompts.ts`
 - Doctor checks return structured results (pass/fail/warn + message)
 
 ## Anti-Patterns

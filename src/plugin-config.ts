@@ -1,4 +1,5 @@
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { parse as parseJsonc } from 'jsonc-parser';
 import { GstackConfigSchema } from './config/schema/index.ts';
@@ -101,7 +102,8 @@ export function loadConfigFromPath(
 }
 
 export function loadPluginConfig(directory: string, _ctx: unknown): GstackConfig {
-  const userConfigDir = path.join(process.env.HOME ?? '~', '.config', 'opencode');
+  const homeDir = process.env.HOME || os.homedir();
+  const userConfigDir = path.join(homeDir, '.config', 'opencode');
   const userConfigPath = path.join(userConfigDir, 'gstack.jsonc');
   const userConfigPathJson = path.join(userConfigDir, 'gstack.json');
   const projectConfigPath = path.join(directory, '.opencode', 'gstack.jsonc');

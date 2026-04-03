@@ -51,6 +51,7 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@clack/prompts": "^1.2.0",
     "@modelcontextprotocol/sdk": "^1.25.2",
     "@opencode-ai/plugin": "^1.2.24",
     "@opencode-ai/sdk": "^1.2.24",

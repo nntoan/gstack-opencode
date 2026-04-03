@@ -20,6 +20,24 @@ function parseBooleanFlag(value: string | undefined): boolean | undefined {
   return undefined;
 }
 
+function parseBooleanFlagWithDefault(
+  explicitValue: string | undefined,
+  fallbackValue: string | undefined
+): boolean | undefined {
+  const fromExplicit = parseBooleanFlag(explicitValue);
+  if (fromExplicit !== undefined) return fromExplicit;
+  return parseBooleanFlag(fallbackValue);
+}
+
+function parseClaudePlanWithDefault(
+  explicitValue: string | undefined,
+  fallbackValue: string | undefined
+): 'none' | 'pro' | 'max' | undefined {
+  const fromExplicit = parseClaudePlan(explicitValue);
+  if (fromExplicit !== undefined) return fromExplicit;
+  return parseClaudePlan(fallbackValue);
+}
+
 function parseClaudePlan(value: string | undefined): 'none' | 'pro' | 'max' | undefined {
   if (value === undefined) return undefined;
   const normalized = value.trim().toLowerCase();
@@ -32,14 +50,26 @@ function parseClaudePlan(value: string | undefined): 'none' | 'pro' | 'max' | un
 export function resolveInstallSelectionFromCli(args: InstallCliArgs): InstallSelection | null {
   const selection = getDefaultInstallSelection();
 
-  const claudePlan = parseClaudePlan(args.claude);
-  const hasOpenAI = parseBooleanFlag(args.openai);
-  const hasGemini = parseBooleanFlag(args.gemini);
-  const hasCopilot = parseBooleanFlag(args.copilot);
-  const hasOpencodeZen = parseBooleanFlag(args.opencodeZen);
-  const hasZaiCodingPlan = parseBooleanFlag(args.zaiCodingPlan);
-  const hasKimiForCoding = parseBooleanFlag(args.kimiForCoding);
-  const hasOpencodeGo = parseBooleanFlag(args.opencodeGo);
+  const claudePlan = parseClaudePlanWithDefault(args.claude, process.env.GSTACK_INSTALL_CLAUDE);
+  const hasOpenAI = parseBooleanFlagWithDefault(args.openai, process.env.GSTACK_INSTALL_OPENAI);
+  const hasGemini = parseBooleanFlagWithDefault(args.gemini, process.env.GSTACK_INSTALL_GEMINI);
+  const hasCopilot = parseBooleanFlagWithDefault(args.copilot, process.env.GSTACK_INSTALL_COPILOT);
+  const hasOpencodeZen = parseBooleanFlagWithDefault(
+    args.opencodeZen,
+    process.env.GSTACK_INSTALL_OPENCODE_ZEN
+  );
+  const hasZaiCodingPlan = parseBooleanFlagWithDefault(
+    args.zaiCodingPlan,
+    process.env.GSTACK_INSTALL_ZAI_CODING_PLAN
+  );
+  const hasKimiForCoding = parseBooleanFlagWithDefault(
+    args.kimiForCoding,
+    process.env.GSTACK_INSTALL_KIMI_FOR_CODING
+  );
+  const hasOpencodeGo = parseBooleanFlagWithDefault(
+    args.opencodeGo,
+    process.env.GSTACK_INSTALL_OPENCODE_GO
+  );
 
   const hasAnyArg =
     claudePlan !== undefined ||
