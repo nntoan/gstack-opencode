@@ -11,6 +11,8 @@ export { PHASE_PATTERNS, SKILL_TO_PHASE_MAP, PHASE_TO_DEFAULT_AGENT } from './in
 export { classifyIntent, extractExplicitSkillName } from './intent-classifier.ts';
 export type { DelegationResult, DelegationOptions } from './delegation-engine.ts';
 export { delegateIntent, getPhaseSkills } from './delegation-engine.ts';
+export { DelegationStateManager } from './delegation-state.ts';
+export { buildDelegationSystemPrompt } from './system-prompt-builder.ts';
 
 export interface OrchestratorOptions {
   agents: GstackAgent[];

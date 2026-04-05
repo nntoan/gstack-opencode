@@ -29,6 +29,42 @@ export interface AnalyticsOptions {
   enabled: boolean;
 }
 
+export interface TokenMetric {
+  timestamp: number;
+  sessionId: string;
+  skillName: string | null; // null = raw conversation (no skill)
+  phase: string;
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  duration_ms: number;
+  success: boolean;
+}
+
+export interface TokenEfficiencyReport {
+  period: { start: number; end: number };
+  bySkill: Record<
+    string,
+    {
+      totalTokens: number;
+      avgTokensPerInvocation: number;
+      invocationCount: number;
+      successRate: number;
+    }
+  >;
+  rawConversation: {
+    totalTokens: number;
+    avgTokensPerMessage: number;
+    messageCount: number;
+  };
+  efficiencyRatio: number; // skill tokens / raw tokens (lower is better)
+}
+
+export interface TokenEfficiencyTracker {
+  track(metric: TokenMetric): Promise<void>;
+  getReport(since?: number): Promise<TokenEfficiencyReport>;
+}
+
 export interface SkillUsageTracker {
   record(event: SkillUsageEvent): void;
   getRecent(limit: number): SkillUsageEvent[];

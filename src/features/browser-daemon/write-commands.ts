@@ -11,6 +11,7 @@ import { validateNavigationUrl } from './url-validation.ts';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { TEMP_DIR, isPathWithin } from './platform.ts';
+import { log } from '../../shared/logger.ts';
 
 export async function handleWriteCommand(
   command: string,
@@ -93,7 +94,11 @@ export async function handleWriteCommand(
         }
         throw err;
       }
-      await page.waitForLoadState('domcontentloaded').catch(() => {});
+      await page.waitForLoadState('domcontentloaded').catch((err: unknown) => {
+        log('[browse] write: waitForLoadState failed after click', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
       return `Clicked ${selector} → now at ${page.url()}`;
     }
 

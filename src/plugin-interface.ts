@@ -3,6 +3,10 @@ import type { GstackSkill } from './types/skill.ts';
 import type { GstackAgent } from './types/agent.ts';
 import type { Managers } from './create-managers.ts';
 import type { Orchestrator } from './features/orchestrator/index.ts';
+import {
+  DelegationStateManager,
+  buildDelegationSystemPrompt,
+} from './features/orchestrator/index.ts';
 import { log } from './shared/index.ts';
 
 export type PluginInterfaceParams = {
@@ -12,12 +16,13 @@ export type PluginInterfaceParams = {
   hooks: Record<string, unknown>;
   tools: Record<string, unknown>;
   orchestrator: Orchestrator;
+  delegationState: DelegationStateManager;
   skills: GstackSkill[];
   agents: GstackAgent[];
 };
 
 export function createPluginInterface(params: PluginInterfaceParams): Record<string, unknown> {
-  const { managers, tools, orchestrator, pluginConfig } = params;
+  const { managers, tools, orchestrator, pluginConfig, delegationState } = params;
 
   return {
     tool: tools,
@@ -36,6 +41,10 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
         const classified = orchestrator.classify(text);
         const result = orchestrator.delegate(classified);
         if (result) {
+          const sessionId = input?.sessionID ?? '';
+          if (sessionId) {
+            delegationState.setDelegation(sessionId, result);
+          }
           log('[plugin-interface] delegated intent', {
             phase: result.phase,
             agent: result.agent.role,
@@ -51,7 +60,21 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
 
     'experimental.chat.messages.transform': async (): Promise<void> => {},
 
-    'experimental.chat.system.transform': async (): Promise<void> => {},
+    'experimental.chat.system.transform': async (input: {
+      sessionID?: string;
+      system?: string;
+    }): Promise<{ system: string } | undefined> => {
+      const sessionId = input?.sessionID ?? '';
+      if (!sessionId) return undefined;
+
+      const delegation = delegationState.getDelegation(sessionId);
+      if (!delegation) return undefined;
+
+      const contextPrompt = buildDelegationSystemPrompt(delegation);
+      return {
+        system: input.system ? `${input.system}\n\n${contextPrompt}` : contextPrompt,
+      };
+    },
 
     event: async (input: {
       type?: string;
@@ -61,6 +84,7 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
         const sessionID = input?.properties?.info?.id;
         if (sessionID) {
           await managers.skillMcpManager.disconnectSession(sessionID);
+          delegationState.clearSession(sessionID);
           log('[plugin-interface] disconnected MCP session', { sessionID });
         }
       }

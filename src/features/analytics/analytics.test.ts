@@ -195,7 +195,7 @@ describe('analytics', () => {
   });
 
   describe('createAnalytics', () => {
-    it('factory returns { skillUsage, eureka, sprintLog }', () => {
+    it('factory returns { skillUsage, eureka, sprintLog, tokenEfficiency }', () => {
       const analytics = createAnalytics({ analyticsDir, enabled: true });
       expect(typeof analytics.skillUsage.record).toBe('function');
       expect(typeof analytics.skillUsage.getRecent).toBe('function');
@@ -203,9 +203,11 @@ describe('analytics', () => {
       expect(typeof analytics.eureka.getInsights).toBe('function');
       expect(typeof analytics.sprintLog.log).toBe('function');
       expect(typeof analytics.sprintLog.getPhaseHistory).toBe('function');
+      expect(typeof analytics.tokenEfficiency.track).toBe('function');
+      expect(typeof analytics.tokenEfficiency.getReport).toBe('function');
     });
 
-    it('all trackers are no-ops when disabled', () => {
+    it('all trackers are no-ops when disabled', async () => {
       const analytics = createAnalytics({ analyticsDir, enabled: false });
       analytics.skillUsage.record({
         timestamp: new Date().toISOString(),
@@ -224,6 +226,17 @@ describe('analytics', () => {
         timestamp: new Date().toISOString(),
         phase: 'build',
         action: 'started',
+      });
+      await analytics.tokenEfficiency.track({
+        timestamp: Date.now(),
+        sessionId: 'test-session',
+        skillName: 'x',
+        phase: 'build',
+        inputTokens: 10,
+        outputTokens: 20,
+        totalTokens: 30,
+        duration_ms: 100,
+        success: true,
       });
 
       expect(existsSync(analyticsDir)).toBe(false);

@@ -108,7 +108,11 @@ export class BrowserManager {
       await Promise.race([
         this.browser.close(),
         new Promise((resolve) => setTimeout(resolve, 5000)),
-      ]).catch(() => {});
+      ]).catch((err: unknown) => {
+        log('[browse] cleanup: browser close failed (may already be disconnected)', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
       this.browser = null;
     }
   }
@@ -343,7 +347,12 @@ export class BrowserManager {
       if (saved.url) {
         await page
           .goto(saved.url, { waitUntil: 'domcontentloaded', timeout: 15000 })
-          .catch(() => {});
+          .catch((err: unknown) => {
+            log('[browse] restore: navigation failed during state restore', {
+              url: saved.url,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
       }
 
       if (saved.storage) {
@@ -392,10 +401,18 @@ export class BrowserManager {
       const state = await this.saveState();
 
       for (const page of this.pages.values()) {
-        await page.close().catch(() => {});
+        await page.close().catch((err: unknown) => {
+          log('[browse] cleanup: page close failed', {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
       }
       this.pages.clear();
-      await this.context.close().catch(() => {});
+      await this.context.close().catch((err: unknown) => {
+        log('[browse] cleanup: context close failed', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
 
       const contextOptions: BrowserContextOptions = {
         viewport: { width: 1280, height: 720 },
@@ -415,7 +432,12 @@ export class BrowserManager {
     } catch (err: unknown) {
       try {
         this.pages.clear();
-        if (this.context) await this.context.close().catch(() => {});
+        if (this.context)
+          await this.context.close().catch((err: unknown) => {
+            log('[browse] cleanup: context close failed during fallback', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
 
         const contextOptions: BrowserContextOptions = {
           viewport: { width: 1280, height: 720 },
@@ -482,7 +504,11 @@ export class BrowserManager {
       this.isHeaded = true;
 
       oldBrowser.removeAllListeners('disconnected');
-      oldBrowser.close().catch(() => {});
+      oldBrowser.close().catch((err: unknown) => {
+        log('[browse] cleanup: old headless browser close failed during handoff', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
 
       return [
         `HANDOFF: Browser opened at ${currentUrl}`,
@@ -490,7 +516,11 @@ export class BrowserManager {
         `STATUS: Waiting for user. Run 'resume' when done.`,
       ].join('\n');
     } catch (err: unknown) {
-      await newBrowser.close().catch(() => {});
+      await newBrowser.close().catch((err: unknown) => {
+        log('[browse] cleanup: new headed browser close failed after handoff error', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
       const msg = err instanceof Error ? err.message : String(err);
       return `ERROR: Handoff failed during state restore — ${msg}. Headless browser still running.`;
     }
