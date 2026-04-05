@@ -8,17 +8,25 @@ import { createTools } from './create-tools.ts';
 import { createHooks } from './create-hooks.ts';
 import { createOrchestrator, DelegationStateManager } from './features/orchestrator/index.ts';
 import { createPluginInterface } from './plugin-interface.ts';
+import { ensureWorkspaceDir } from './features/workspace-state/index.ts';
 
 const GstackPlugin: Plugin = async (ctx) => {
   log('[GstackPlugin] ENTRY - plugin loading', { directory: ctx.directory });
 
   const pluginConfig = loadPluginConfig(ctx.directory, ctx);
+  ensureWorkspaceDir(ctx.directory);
   const { skills, agents } = createSkillsAndAgents(pluginConfig);
   const managers = createManagers({ ctx, pluginConfig, skills, agents });
   const orchestrator = createOrchestrator({ agents, skills, config: pluginConfig });
   const delegationState = new DelegationStateManager();
   const toolsResult = createTools({ ctx, pluginConfig, managers });
-  const hooks = createHooks({ ctx, pluginConfig, managers, delegationState });
+  const hooks = createHooks({
+    ctx,
+    pluginConfig,
+    managers,
+    delegationState,
+    workspaceState: managers.workspaceState,
+  });
 
   return createPluginInterface({
     ctx,

@@ -53,14 +53,35 @@ describe('classifyIntent', () => {
     expect(result.confidence).toBeLessThanOrEqual(0.6);
   });
 
-  it('falls back to build phase when no pattern matches', () => {
+  it('falls back to build phase when no pattern matches and input is not a question', () => {
     const result = classifyIntent('hello team', { orchestrationMode: 'multi-agent' });
     expect(result).toMatchObject({
       phase: 'build',
-      confidence: 0.3,
+      confidence: 0.2,
       suggestedAgent: 'builder',
-      reasoning: 'No strong pattern match',
+      reasoning: 'No strong pattern match, defaulting to build',
     });
+  });
+
+  it('falls back to think phase when no pattern matches and input is a question', () => {
+    // "Is this a good name?" has no phase-pattern keywords → question detection kicks in
+    const result = classifyIntent('Is this a good name?', { orchestrationMode: 'multi-agent' });
+    expect(result).toMatchObject({
+      phase: 'think',
+      confidence: 0.4,
+      suggestedAgent: 'ceo',
+      reasoning: 'Question detected, defaulting to think phase',
+    });
+  });
+
+  it('falls back to think phase for how/should/can questions with no pattern match', () => {
+    const noMatch = classifyIntent('should I do it', { orchestrationMode: 'multi-agent' });
+    expect(noMatch.phase).toBe('think');
+    expect(noMatch.suggestedAgent).toBe('ceo');
+    const canResult = classifyIntent('can you help me understand this', {
+      orchestrationMode: 'multi-agent',
+    });
+    expect(canResult.phase).toBe('think');
   });
 });
 

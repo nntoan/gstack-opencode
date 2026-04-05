@@ -96,14 +96,29 @@ describe('delegation-engine', () => {
       expect(result?.reasoning).toContain('Fallback to builder');
     });
 
-    it('falls back to builder when agent not found', () => {
+    it('falls back to phase-default agent when suggested agent not found', () => {
+      // baseClassified has phase: 'review'; reviewer IS in allAgents → phase fallback picks it
       const classified: ClassifiedIntent = { ...baseClassified, suggestedAgent: 'doc-engineer' };
       const result = delegateIntent(classified, {
         agents: allAgents,
         skills: allSkills,
         orchestrationMode: 'multi-agent',
       });
+      expect(result?.agent.role).toBe('reviewer');
+      expect(result?.reasoning).toContain('Phase fallback to reviewer');
+    });
+
+    it('falls back to builder when phase-default agent is also not available', () => {
+      // phase: 'review', reviewer is absent → falls through to builder
+      const noReviewerAgents = [builderAgent, engManagerAgent, qaLeadAgent];
+      const classified: ClassifiedIntent = { ...baseClassified, suggestedAgent: 'doc-engineer' };
+      const result = delegateIntent(classified, {
+        agents: noReviewerAgents,
+        skills: allSkills,
+        orchestrationMode: 'multi-agent',
+      });
       expect(result?.agent.role).toBe('builder');
+      expect(result?.reasoning).toContain('Fallback to builder');
     });
 
     it('includes low confidence note when confidence < 0.5', () => {
@@ -137,11 +152,12 @@ describe('delegation-engine', () => {
       expect(skillNames).toContain('codex');
     });
 
-    it('returns null when no fallback builder exists', () => {
-      const noBuilderAgents = [reviewerAgent, engManagerAgent];
+    it('returns null when neither phase-default agent nor builder exists', () => {
+      // phase: 'review', neither reviewer nor builder is present
+      const noReviewerNoBuilderAgents = [engManagerAgent, qaLeadAgent];
       const classified: ClassifiedIntent = { ...baseClassified, suggestedAgent: 'doc-engineer' };
       const result = delegateIntent(classified, {
-        agents: noBuilderAgents,
+        agents: noReviewerNoBuilderAgents,
         skills: allSkills,
         orchestrationMode: 'multi-agent',
       });

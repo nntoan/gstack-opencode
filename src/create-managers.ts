@@ -6,6 +6,10 @@ import { SkillMcpManager } from './features/skill-mcp-manager/index.ts';
 import { createConfigHandler } from './plugin-handlers/index.ts';
 import { createSprintBacklog } from './features/sprint-backlog/index.ts';
 import type { SprintBacklog } from './features/sprint-backlog/index.ts';
+import { createWorkspaceState } from './features/workspace-state/index.ts';
+import { createAnalytics } from './features/analytics/index.ts';
+import type { Analytics } from './features/analytics/index.ts';
+import { getAnalyticsDir } from './shared/path-helpers.ts';
 
 export class DeferredMcpInvoker implements McpToolInvoker {
   private delegate: McpToolInvoker | null = null;
@@ -38,6 +42,8 @@ export interface Managers {
   configHandler: ReturnType<typeof createConfigHandler>;
   sprintBacklog: SprintBacklog;
   mcpInvoker: DeferredMcpInvoker;
+  workspaceState: ReturnType<typeof createWorkspaceState>;
+  analytics: Analytics;
 }
 
 export function createManagers(params: {
@@ -52,6 +58,11 @@ export function createManagers(params: {
   const configHandler = createConfigHandler({ ctx: _ctx, pluginConfig, skills, agents });
   const mcpInvoker = new DeferredMcpInvoker();
   const sprintBacklog = createSprintBacklog(mcpInvoker);
+  const workspaceState = createWorkspaceState(_ctx.directory);
+  const analytics = createAnalytics({
+    analyticsDir: getAnalyticsDir(_ctx.directory),
+    enabled: true,
+  });
 
-  return { skillMcpManager, configHandler, sprintBacklog, mcpInvoker };
+  return { skillMcpManager, configHandler, sprintBacklog, mcpInvoker, workspaceState, analytics };
 }

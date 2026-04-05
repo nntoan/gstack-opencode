@@ -23,6 +23,21 @@ describe('createPluginInterface', () => {
     skillMcpManager: mockMcpManager as unknown as Managers['skillMcpManager'],
     sprintBacklog: {} as unknown as Managers['sprintBacklog'],
     mcpInvoker: new DeferredMcpInvoker(),
+    workspaceState: {
+      boulder: {
+        read: () => null,
+        write: () => true,
+        append: () => null,
+        clear: () => false,
+        upsert: () => null,
+      },
+      plans: {} as unknown as Managers['workspaceState']['plans'],
+      sessions: {} as unknown as Managers['workspaceState']['sessions'],
+      reviews: {} as unknown as Managers['workspaceState']['reviews'],
+      notepads: () => ({}) as unknown as ReturnType<Managers['workspaceState']['notepads']>,
+      ensureDir: () => {},
+    },
+    analytics: {} as unknown as Managers['analytics'],
   };
 
   const mockOrchestrator: Orchestrator = {

@@ -43,12 +43,26 @@ export function classifyIntent(text: string, options: IntentClassifierOptions): 
   }
 
   if (phaseScores.length === 0) {
+    const isQuestion =
+      /^(?:what|how|why|should|can|could|would|is|are|do|does)\b/i.test(text.trim()) ||
+      /\?/.test(text);
+
+    if (isQuestion) {
+      return {
+        phase: 'think',
+        confidence: 0.4,
+        suggestedAgent: 'ceo',
+        suggestedSkills: getSuggestedSkillsForPhase('think'),
+        reasoning: 'Question detected, defaulting to think phase',
+      };
+    }
+
     return {
       phase: 'build',
-      confidence: 0.3,
+      confidence: 0.2,
       suggestedAgent: 'builder',
       suggestedSkills: getSuggestedSkillsForPhase('build'),
-      reasoning: 'No strong pattern match',
+      reasoning: 'No strong pattern match, defaulting to build',
     };
   }
 

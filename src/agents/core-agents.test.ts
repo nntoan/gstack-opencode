@@ -106,8 +106,8 @@ describe('Core Agent Definitions', () => {
       expect(builderAgent.sprintPhase).toBe('build');
     });
 
-    it('has empty skills array (general coder)', () => {
-      expect(builderAgent.skills).toEqual([]);
+    it('has review and investigate skills for self-checking during builds', () => {
+      expect(builderAgent.skills).toEqual(['review', 'investigate']);
     });
 
     it('has no hard-coded model', () => {

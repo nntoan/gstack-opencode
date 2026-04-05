@@ -3,6 +3,7 @@ import type { Managers } from './create-managers.ts';
 import type { HookRegistry } from './types/hooks.ts';
 import type { SprintPhase } from './types/agent.ts';
 import type { DelegationStateManager } from './features/orchestrator/index.ts';
+import type { createWorkspaceState } from './features/workspace-state/index.ts';
 import {
   createHookRegistry,
   createToolOutputTruncator,
@@ -19,14 +20,25 @@ import {
   createBudgetWarningHook,
   createBudgetTrackingHook,
 } from './features/token-budget/index.ts';
+import {
+  createBoulderHook,
+  createProgressHook,
+  createRecoveryHook,
+} from './features/session-continuity/index.ts';
+import {
+  createScorecardHook,
+  createDelegationContextHook,
+  createSprintLogHook,
+} from './features/quality-scorecard/index.ts';
 
 export function createHooks(params: {
   ctx: { directory: string };
   pluginConfig: GstackConfig;
   managers: Managers;
   delegationState: DelegationStateManager;
+  workspaceState: ReturnType<typeof createWorkspaceState>;
 }): HookRegistry {
-  const { pluginConfig, delegationState } = params;
+  const { pluginConfig, delegationState, workspaceState } = params;
   const registry = createHookRegistry();
 
   // --- 2D: Core infrastructure hooks ---
@@ -51,7 +63,15 @@ export function createHooks(params: {
     createGateHook({
       gateEngine,
       getCurrentPhase,
-      getSessionMetadata: () => ({}), // metadata tracking not yet implemented
+      getSessionMetadata: (_sessionId: string) => {
+        const boulder = workspaceState.boulder.read();
+        if (!boulder) return {};
+        return {
+          activePlan: boulder.active_plan,
+          planName: boulder.plan_name,
+          currentPhase: boulder.current_phase,
+        };
+      },
     })
   );
 
@@ -65,6 +85,16 @@ export function createHooks(params: {
     registry.register(createBudgetWarningHook({ budgetTracker }));
     registry.register(createBudgetTrackingHook({ budgetTracker }));
   }
+
+  // --- Phase 5: Session continuity hooks ---
+  registry.register(createBoulderHook({ workspaceState, delegationState }));
+  registry.register(createProgressHook({ workspaceState }));
+  registry.register(createRecoveryHook({ workspaceState, delegationState }));
+
+  // --- Phase 6: Quality scorecard hooks ---
+  registry.register(createScorecardHook({ workspaceState, analytics: params.managers.analytics }));
+  registry.register(createDelegationContextHook({ workspaceState, delegationState }));
+  registry.register(createSprintLogHook({ analytics: params.managers.analytics, delegationState }));
 
   return registry;
 }

@@ -2,7 +2,7 @@ import type { GstackAgent, SprintPhase } from '../../types/agent.ts';
 import type { BuiltinSkill } from '../../types/skill.ts';
 import type { OrchestrationMode } from '../../types/config.ts';
 import type { ClassifiedIntent } from './types.ts';
-import { SKILL_TO_PHASE_MAP } from './intent-patterns.ts';
+import { PHASE_TO_DEFAULT_AGENT, SKILL_TO_PHASE_MAP } from './intent-patterns.ts';
 
 export interface DelegationResult {
   agent: GstackAgent;
@@ -43,8 +43,15 @@ export function delegateIntent(
   let reasoningPrefix = '';
 
   if (!targetAgent || isDisabled) {
-    selectedAgent = agents.find((a) => a.role === 'builder');
-    reasoningPrefix = `Fallback to builder (${!targetAgent ? 'agent not found' : 'agent disabled'}). `;
+    const fallbackRole = PHASE_TO_DEFAULT_AGENT[classified.phase];
+    const phaseAgent = agents.find((a) => a.role === fallbackRole && !disabledAgents.has(a.role));
+    if (phaseAgent) {
+      selectedAgent = phaseAgent;
+      reasoningPrefix = `Phase fallback to ${phaseAgent.role}. `;
+    } else {
+      selectedAgent = agents.find((a) => a.role === 'builder');
+      reasoningPrefix = `Fallback to builder (${!targetAgent ? 'agent not found' : 'agent disabled'}). `;
+    }
   } else {
     selectedAgent = targetAgent;
   }
