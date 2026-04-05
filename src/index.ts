@@ -18,7 +18,7 @@ const GstackPlugin: Plugin = async (ctx) => {
   const orchestrator = createOrchestrator({ agents, skills, config: pluginConfig });
   const delegationState = new DelegationStateManager();
   const toolsResult = createTools({ ctx, pluginConfig, managers });
-  const hooks = createHooks({ ctx, pluginConfig, managers });
+  const hooks = createHooks({ ctx, pluginConfig, managers, delegationState });
 
   return createPluginInterface({
     ctx,

@@ -1,5 +1,6 @@
 import type { GstackSkill } from '../../types/skill.ts';
 import type { CreateBuiltinSkillsOptions } from './types.ts';
+import { isSlimSkill } from './slim-preset.ts';
 import { officeHoursSkill } from './skills/office-hours.ts';
 import { planCeoReviewSkill } from './skills/plan-ceo-review.ts';
 import { planEngReviewSkill } from './skills/plan-eng-review.ts';
@@ -55,10 +56,11 @@ const ALL_SKILLS: GstackSkill[] = [
 ];
 
 export function createBuiltinSkills(options: CreateBuiltinSkillsOptions = {}): GstackSkill[] {
-  const { disabledSkills = new Set(), browserAvailable = true } = options;
+  const { disabledSkills = new Set(), browserAvailable = true, preset = 'full' } = options;
   return ALL_SKILLS.filter((skill) => {
     if (disabledSkills.has(skill.name)) return false;
     if (!browserAvailable && skill.browserRequired) return false;
+    if (preset === 'slim' && !isSlimSkill(skill.name)) return false;
     return true;
   });
 }

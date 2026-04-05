@@ -8,6 +8,8 @@ export type {
   McpOverrideConfig,
   BrowserConfig,
   TelemetryConfig,
+  TokenBudgetConfig,
+  PresetMode,
 } from './types/config.ts';
 export type { McpServerConfig, McpName, McpTier } from './types/mcp.ts';
 export type {
@@ -18,3 +20,12 @@ export type {
   SessionState,
 } from './types/orchestrator.ts';
 export type { HookEventName, HookDefinition, HookRegistry, HookHandler } from './types/hooks.ts';
+export type {
+  GateVerdict,
+  GateResult,
+  GateTransition,
+  GateEvaluator,
+  GateContext,
+  GateDefinition,
+  GateEngine,
+} from './types/quality-gate.ts';

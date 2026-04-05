@@ -25,9 +25,16 @@ const CategoryOverrideSchema = z.record(z.string(), z.unknown());
 
 const RuntimeFallbackSchema = z.union([z.boolean(), z.record(z.string(), z.unknown())]);
 
+const TokenBudgetSchema = z.object({
+  enabled: z.boolean().default(false),
+  max_tokens_per_session: z.number().positive().default(1_000_000),
+  warn_at_percent: z.number().min(1).max(99).default(80),
+});
+
 export const GstackConfigSchema = z
   .object({
     orchestration_mode: z.enum(['multi-agent', 'skills-only']).default('multi-agent'),
+    preset: z.enum(['full', 'slim']).default('full'),
     disabled_skills: z.array(z.string()).default([]),
     disabled_agents: z.array(z.string()).default([]),
     disabled_categories: z.array(z.string()).default([]),
@@ -45,6 +52,7 @@ export const GstackConfigSchema = z
     backlog: BacklogConfigSchema.optional(),
     browser: BrowserConfigSchema.optional(),
     telemetry: TelemetryConfigSchema.optional(),
+    token_budget: TokenBudgetSchema.optional(),
   })
   .transform((data) => ({
     ...data,

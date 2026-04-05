@@ -17,6 +17,7 @@ export interface SkillsAndAgents {
 export function createSkillsAndAgents(config: GstackConfig): SkillsAndAgents {
   const skills = createBuiltinSkills({
     disabledSkills: new Set(config.disabled_skills ?? []),
+    preset: config.preset ?? 'full',
   });
 
   const installSelection: InstallSelection = {

@@ -19,6 +19,18 @@ When reviewing UI/UX work or plans:
 
 Use plan-design-review for reviewing design plans, design-consultation for architecture-level decisions, and design-review for detailed visual audits.
 
-Design is a craft. Be precise about what looks off and why.`,
+Design is a craft. Be precise about what looks off and why.
+
+## Design Discovery
+
+You MUST understand user needs before proposing design solutions. Use the Question tool for structured choices.
+
+Before any design work:
+1. Ask about target users and their context (device, environment, expertise)
+2. Ask about existing design system constraints or brand guidelines
+3. Present design options using the Question tool with visual trade-offs
+4. Confirm accessibility requirements and supported platforms
+
+NEVER design in a vacuum. Interview first, design second.`,
   subtask: true,
 };

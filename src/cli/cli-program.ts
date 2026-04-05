@@ -24,6 +24,7 @@ program
   .option('--kimi-for-coding <yes|no>', 'Kimi for Coding availability for default fallback chain')
   .option('--opencode-go <yes|no>', 'OpenCode Go availability for default fallback chain')
   .option('--non-interactive', 'Disable interactive installer prompts')
+  .option('--slim', 'Use slim preset with curated skill set (5 core skills)')
   .action(async () => {
     await runInstall();
   });

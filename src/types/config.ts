@@ -1,5 +1,13 @@
 export type OrchestrationMode = 'multi-agent' | 'skills-only';
 
+export type PresetMode = 'full' | 'slim';
+
+export interface TokenBudgetConfig {
+  enabled: boolean;
+  max_tokens_per_session: number;
+  warn_at_percent: number;
+}
+
 export type AgentRegistrationMode = 'augment' | 'curated' | 'replace';
 
 export interface BacklogConfig {
@@ -55,6 +63,7 @@ export type RuntimeFallbackConfig = boolean | Record<string, unknown>;
 
 export interface GstackConfig {
   orchestration_mode: OrchestrationMode;
+  preset?: PresetMode;
   disabled_skills: string[];
   disabled_agents: string[];
   disabled_categories: string[];
@@ -69,4 +78,5 @@ export interface GstackConfig {
   backlog: BacklogConfig;
   browser?: BrowserConfig;
   telemetry?: TelemetryConfig;
+  token_budget?: TokenBudgetConfig;
 }

@@ -10,6 +10,7 @@ export interface InstallCliArgs {
   kimiForCoding?: string;
   opencodeGo?: string;
   nonInteractive?: boolean;
+  slim?: boolean;
 }
 
 function parseBooleanFlag(value: string | undefined): boolean | undefined {
