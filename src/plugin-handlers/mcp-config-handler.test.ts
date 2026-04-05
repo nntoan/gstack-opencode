@@ -7,6 +7,7 @@ function makePluginConfig(overrides: Partial<GstackConfig> = {}): GstackConfig {
     orchestration_mode: 'multi-agent',
     disabled_skills: [],
     disabled_agents: [],
+    disabled_categories: [],
     disabled_mcps: [],
     disabled_hooks: [],
     backlog: { enabled: true, auto_create_tasks: true, auto_update_status: true },

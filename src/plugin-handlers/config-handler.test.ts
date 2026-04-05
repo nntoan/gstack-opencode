@@ -7,6 +7,7 @@ function makePluginConfig(overrides: Partial<GstackConfig> = {}): GstackConfig {
   return {
     orchestration_mode: 'multi-agent',
     disabled_agents: [],
+    disabled_categories: [],
     disabled_skills: [],
     disabled_mcps: [],
     disabled_hooks: [],
@@ -83,17 +84,26 @@ describe('createConfigHandler', () => {
     });
   });
 
-  it('in skills-only mode: agents are NOT registered', async () => {
+  it('in skills-only mode with default curated registration: host built-ins are suppressed and explicit overrides remain', async () => {
     const pluginConfig = makePluginConfig({
       orchestration_mode: 'skills-only',
       agents: { 'ceo-agent': { model: 'claude-opus-4' } },
     });
-    const config: Record<string, unknown> = {};
+    const config: Record<string, unknown> = {
+      agent: {
+        build: { description: 'host build', prompt: 'host', mode: 'primary' },
+        plan: { description: 'host plan', prompt: 'host', mode: 'primary' },
+        reviewer: { description: 'external reviewer', prompt: 'external', mode: 'subagent' },
+      },
+    };
     const handler = createConfigHandler({ ctx: { directory: '/tmp' }, pluginConfig });
     await handler(config);
 
-    const agents = config.agent as Record<string, unknown> | undefined;
-    expect(agents?.['ceo-agent']).toBeUndefined();
+    const agents = config.agent as Record<string, unknown>;
+    expect(agents?.build).toBeUndefined();
+    expect(agents?.plan).toBeUndefined();
+    expect(agents?.reviewer).toBeDefined();
+    expect(agents?.['ceo-agent']).toMatchObject({ model: 'claude-opus-4' });
   });
 
   it('disabled_agents are skipped', async () => {
@@ -140,6 +150,101 @@ describe('createConfigHandler', () => {
       mode: 'all',
     });
     expect(normalized.ceo).toBeDefined();
+  });
+
+  it('curated mode suppresses host built-ins and keeps external plugin agents', async () => {
+    const pluginConfig = makePluginConfig({
+      agent_registration: {
+        mode: 'curated',
+        suppress_host_builtins: ['build', 'plan'],
+      },
+    });
+    const config: Record<string, unknown> = {
+      agent: {
+        build: { description: 'host build', prompt: 'host', mode: 'primary' },
+        plan: { description: 'host plan', prompt: 'host', mode: 'primary' },
+        reviewer: { description: 'external reviewer', prompt: 'external', mode: 'subagent' },
+      },
+    };
+
+    const handler = createConfigHandler({
+      ctx: { directory: '/tmp' },
+      pluginConfig,
+      agents: sampleAgents,
+    });
+    await handler(config);
+
+    const agents = config.agent as Record<string, unknown>;
+    expect(agents.build).toBeUndefined();
+    expect(agents.plan).toBeUndefined();
+    expect(agents.reviewer).toMatchObject({ description: 'external reviewer' });
+    expect(agents.ceo).toBeDefined();
+    expect(agents.builder).toBeDefined();
+  });
+
+  it('replace mode keeps only gstack agent registry output', async () => {
+    const pluginConfig = makePluginConfig({
+      agent_registration: {
+        mode: 'replace',
+        suppress_host_builtins: ['build', 'plan'],
+      },
+    });
+    const config: Record<string, unknown> = {
+      agent: {
+        reviewer: { description: 'external reviewer', prompt: 'external', mode: 'subagent' },
+      },
+    };
+
+    const handler = createConfigHandler({
+      ctx: { directory: '/tmp' },
+      pluginConfig,
+      agents: sampleAgents,
+    });
+    await handler(config);
+
+    const agents = config.agent as Record<string, unknown>;
+    expect(agents.reviewer).toBeUndefined();
+    expect(Object.keys(agents).sort()).toEqual(['builder', 'ceo']);
+  });
+
+  it('applies categories and runtime_fallback config', async () => {
+    const pluginConfig = makePluginConfig({
+      categories: {
+        quick: { model: 'opencode/gpt-5-nano' },
+        deep: { model: 'openai/gpt-5.3-codex' },
+      },
+      disabled_categories: ['deep'],
+      runtime_fallback: {
+        enabled: true,
+        max_fallback_attempts: 4,
+      },
+    });
+    const config: Record<string, unknown> = {
+      categories: {
+        writing: { model: 'kimi-for-coding/k2p5' },
+      },
+      runtime_fallback: {
+        timeout_seconds: 30,
+      },
+    };
+
+    const handler = createConfigHandler({
+      ctx: { directory: '/tmp' },
+      pluginConfig,
+      agents: sampleAgents,
+    });
+    await handler(config);
+
+    expect(config.categories).toMatchObject({
+      writing: { model: 'kimi-for-coding/k2p5' },
+      quick: { model: 'opencode/gpt-5-nano' },
+    });
+    expect((config.categories as Record<string, unknown>).deep).toBeUndefined();
+    expect(config.runtime_fallback).toMatchObject({
+      timeout_seconds: 30,
+      enabled: true,
+      max_fallback_attempts: 4,
+    });
   });
 
   it('disabled_mcps are excluded via applyMcpConfig integration', async () => {

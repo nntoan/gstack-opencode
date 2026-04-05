@@ -1,5 +1,7 @@
 export type OrchestrationMode = 'multi-agent' | 'skills-only';
 
+export type AgentRegistrationMode = 'augment' | 'curated' | 'replace';
+
 export interface BacklogConfig {
   enabled: boolean;
   auto_create_tasks: boolean;
@@ -11,6 +13,13 @@ export interface AgentOverrideConfig {
   instructions?: string;
   enabled?: boolean;
 }
+
+export interface AgentRegistrationConfig {
+  mode: AgentRegistrationMode;
+  suppress_host_builtins: string[];
+}
+
+export type CategoryOverrideConfig = unknown;
 
 export interface InstallSelectionConfig {
   claude_plan?: 'none' | 'pro' | 'max';
@@ -42,14 +51,20 @@ export interface TelemetryConfig {
   };
 }
 
+export type RuntimeFallbackConfig = boolean | Record<string, unknown>;
+
 export interface GstackConfig {
   orchestration_mode: OrchestrationMode;
   disabled_skills: string[];
   disabled_agents: string[];
+  disabled_categories: string[];
   disabled_mcps: string[];
   disabled_hooks: string[];
   install_selection?: InstallSelectionConfig;
+  agent_registration?: AgentRegistrationConfig;
   agents?: Record<string, AgentOverrideConfig>;
+  categories?: Record<string, CategoryOverrideConfig>;
+  runtime_fallback?: RuntimeFallbackConfig;
   mcp?: Record<string, McpOverrideConfig>;
   backlog: BacklogConfig;
   browser?: BrowserConfig;

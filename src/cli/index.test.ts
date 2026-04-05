@@ -36,9 +36,13 @@ describe('runInstallWithOptions', () => {
     const content: string = await Bun.file(configPath).text();
     const parsed = parseJsonc(content) as Record<string, unknown>;
     const agents = parsed.agents as Record<string, unknown>;
+    const categories = parsed.categories as Record<string, unknown>;
 
     expect(agents.ceo).toBeDefined();
     expect((agents.ceo as Record<string, unknown>).model).toBe('opencode/gpt-5-nano');
+    expect(parsed.agent_registration).toBeUndefined();
+    expect(categories.quick).toBeDefined();
+    expect(categories['visual-engineering']).toBeDefined();
   });
 
   it('does not include install_selection in generated config', async () => {
@@ -60,6 +64,8 @@ describe('runInstallWithOptions', () => {
     expect(parsed.orchestration_mode).toBeUndefined();
     expect(parsed.disabled_agents).toBeUndefined();
     expect(parsed.disabled_skills).toBeUndefined();
+    expect(parsed.categories).toBeDefined();
+    expect(parsed.agent_registration).toBeUndefined();
   });
 
   it('adds @nntoan/gstack to global plugin list if missing', async () => {

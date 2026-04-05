@@ -2,6 +2,7 @@ import type { GstackConfig } from '../types/config.ts';
 import type { GstackSkill } from '../types/skill.ts';
 import type { GstackAgent } from '../types/agent.ts';
 import { log } from '../shared/index.ts';
+import { deepMerge } from '../shared/deep-merge.ts';
 import { applyMcpConfig } from './mcp-config-handler.ts';
 
 export interface ConfigHandlerDeps {
@@ -52,12 +53,25 @@ function applyAgentConfig(params: {
 }): void {
   const { config, pluginConfig, agents } = params;
   const disabledSet = new Set(pluginConfig.disabled_agents ?? []);
+  const registrationMode = pluginConfig.agent_registration?.mode ?? 'curated';
+  const suppressedHostBuiltins = new Set(
+    pluginConfig.agent_registration?.suppress_host_builtins ?? ['build', 'plan']
+  );
   const agentOverrides = pluginConfig.agents ?? {};
   const builtInAgents = agents ? agentsToOpenCodeAgentConfig(agents) : {};
 
   const existingAgents =
     (config.agent as Record<string, unknown>) ?? (config.agents as Record<string, unknown>) ?? {};
-  const merged: Record<string, unknown> = { ...builtInAgents, ...existingAgents };
+  const curatedExisting = Object.fromEntries(
+    Object.entries(existingAgents).filter(([key]) => !suppressedHostBuiltins.has(key))
+  );
+
+  const merged: Record<string, unknown> =
+    registrationMode === 'replace'
+      ? { ...builtInAgents }
+      : registrationMode === 'curated'
+        ? { ...curatedExisting, ...builtInAgents }
+        : { ...builtInAgents, ...existingAgents };
 
   for (const key of Object.keys(merged)) {
     if (disabledSet.has(key)) {
@@ -71,6 +85,55 @@ function applyAgentConfig(params: {
   }
 
   config.agent = merged;
+}
+
+function applyCategoryConfig(params: {
+  config: Record<string, unknown>;
+  pluginConfig: GstackConfig;
+}): void {
+  const { config, pluginConfig } = params;
+  const existingCategories = (config.categories as Record<string, unknown>) ?? {};
+  const pluginCategories = pluginConfig.categories ?? {};
+  const disabledSet = new Set(pluginConfig.disabled_categories ?? []);
+
+  const merged = {
+    ...existingCategories,
+    ...pluginCategories,
+  };
+
+  for (const key of Object.keys(merged)) {
+    if (disabledSet.has(key)) {
+      delete merged[key];
+    }
+  }
+
+  config.categories = merged;
+}
+
+function applyRuntimeFallbackConfig(params: {
+  config: Record<string, unknown>;
+  pluginConfig: GstackConfig;
+}): void {
+  const { config, pluginConfig } = params;
+  if (pluginConfig.runtime_fallback === undefined) {
+    return;
+  }
+
+  const existing = config.runtime_fallback;
+  if (
+    pluginConfig.runtime_fallback &&
+    typeof pluginConfig.runtime_fallback === 'object' &&
+    existing &&
+    typeof existing === 'object'
+  ) {
+    config.runtime_fallback = deepMerge(
+      existing as Record<string, unknown>,
+      pluginConfig.runtime_fallback as Record<string, unknown>
+    );
+    return;
+  }
+
+  config.runtime_fallback = pluginConfig.runtime_fallback;
 }
 
 function applySkillConfig(params: {
@@ -98,9 +161,15 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
   const { pluginConfig, skills, agents } = deps;
 
   return async (config: Record<string, unknown>): Promise<void> => {
-    if (pluginConfig.orchestration_mode === 'multi-agent') {
+    if (
+      pluginConfig.orchestration_mode === 'multi-agent' ||
+      (pluginConfig.agent_registration?.mode ?? 'curated') !== 'augment'
+    ) {
       applyAgentConfig({ config, pluginConfig, agents });
     }
+
+    applyCategoryConfig({ config, pluginConfig });
+    applyRuntimeFallbackConfig({ config, pluginConfig });
 
     applySkillConfig({ config, pluginConfig, skills });
 

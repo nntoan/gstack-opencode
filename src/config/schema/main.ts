@@ -16,15 +16,31 @@ const InstallSelectionSchema = z.object({
   has_opencode_go: z.boolean().optional(),
 });
 
+const AgentRegistrationSchema = z.object({
+  mode: z.enum(['augment', 'curated', 'replace']).default('curated'),
+  suppress_host_builtins: z.array(z.string()).default(['build', 'plan']),
+});
+
+const CategoryOverrideSchema = z.record(z.string(), z.unknown());
+
+const RuntimeFallbackSchema = z.union([z.boolean(), z.record(z.string(), z.unknown())]);
+
 export const GstackConfigSchema = z
   .object({
     orchestration_mode: z.enum(['multi-agent', 'skills-only']).default('multi-agent'),
     disabled_skills: z.array(z.string()).default([]),
     disabled_agents: z.array(z.string()).default([]),
+    disabled_categories: z.array(z.string()).default([]),
     disabled_mcps: z.array(z.string()).default([]),
     disabled_hooks: z.array(z.string()).default([]),
     install_selection: InstallSelectionSchema.optional(),
+    agent_registration: AgentRegistrationSchema.default({
+      mode: 'curated',
+      suppress_host_builtins: ['build', 'plan'],
+    }),
     agents: AgentOverridesSchema.optional(),
+    categories: CategoryOverrideSchema.optional(),
+    runtime_fallback: RuntimeFallbackSchema.optional(),
     mcp: McpConfigSchema.optional(),
     backlog: BacklogConfigSchema.optional(),
     browser: BrowserConfigSchema.optional(),

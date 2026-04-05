@@ -14,6 +14,9 @@ export function mergeConfigs(base: GstackConfig, override: Partial<GstackConfig>
     disabled_agents: [
       ...new Set([...(base.disabled_agents ?? []), ...(override.disabled_agents ?? [])]),
     ],
+    disabled_categories: [
+      ...new Set([...(base.disabled_categories ?? []), ...(override.disabled_categories ?? [])]),
+    ],
     disabled_mcps: [...new Set([...(base.disabled_mcps ?? []), ...(override.disabled_mcps ?? [])])],
     disabled_skills: [
       ...new Set([...(base.disabled_skills ?? []), ...(override.disabled_skills ?? [])]),

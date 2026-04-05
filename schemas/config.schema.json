@@ -5,7 +5,10 @@
   "properties": {
     "orchestration_mode": {
       "type": "string",
-      "enum": ["multi-agent", "skills-only"],
+      "enum": [
+        "multi-agent",
+        "skills-only"
+      ],
       "default": "multi-agent",
       "description": "Orchestration mode for agent execution"
     },
@@ -70,7 +73,10 @@
           "properties": {
             "provider": {
               "type": "string",
-              "enum": ["exa", "tavily"],
+              "enum": [
+                "exa",
+                "tavily"
+              ],
               "default": "exa"
             },
             "api_key": {

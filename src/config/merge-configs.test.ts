@@ -7,8 +7,13 @@ function createBaseConfig(): GstackConfig {
     orchestration_mode: 'multi-agent',
     disabled_skills: ['skill-base'],
     disabled_agents: ['agent-base'],
+    disabled_categories: ['category-base'],
     disabled_mcps: ['mcp-base'],
     disabled_hooks: ['hook-base'],
+    agent_registration: {
+      mode: 'augment',
+      suppress_host_builtins: ['build', 'plan'],
+    },
     install_selection: {
       claude_plan: 'pro',
       has_openai: false,
@@ -64,12 +69,14 @@ describe('mergeConfigs', () => {
     const result = mergeConfigs(base, {
       disabled_skills: ['skill-base', 'skill-project'],
       disabled_agents: ['agent-project', 'agent-base'],
+      disabled_categories: ['category-project', 'category-base'],
       disabled_mcps: ['mcp-project', 'mcp-base'],
       disabled_hooks: ['hook-project', 'hook-base'],
     });
 
     expect(result.disabled_skills).toEqual(['skill-base', 'skill-project']);
     expect(result.disabled_agents).toEqual(['agent-base', 'agent-project']);
+    expect(result.disabled_categories).toEqual(['category-base', 'category-project']);
     expect(result.disabled_mcps).toEqual(['mcp-base', 'mcp-project']);
     expect(result.disabled_hooks).toEqual(['hook-base', 'hook-project']);
   });

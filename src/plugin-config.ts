@@ -11,6 +11,7 @@ import { mergeConfigs } from './config/merge-configs.ts';
 const PARTIAL_STRING_ARRAY_KEYS = new Set([
   'disabled_mcps',
   'disabled_agents',
+  'disabled_categories',
   'disabled_skills',
   'disabled_hooks',
 ]);
@@ -116,7 +117,11 @@ export function loadPluginConfig(directory: string, _ctx: unknown): GstackConfig
   const projectConfig = loadConfigFromPath(projectPath, null);
   if (projectConfig) {
     const baseDefaults = GstackConfigSchema.parse({});
-    const normalizedBase = deepMerge(baseDefaults, config as GstackConfig) ?? baseDefaults;
+    const mergedBase = deepMerge(
+      baseDefaults as Record<string, unknown>,
+      config as Record<string, unknown>
+    );
+    const normalizedBase = (mergedBase as unknown as GstackConfig) ?? baseDefaults;
     config = mergeConfigs(normalizedBase, projectConfig);
   }
 

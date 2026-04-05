@@ -37,6 +37,7 @@ describe('plugin-config', () => {
 
     expect(config.orchestration_mode).toBe('multi-agent');
     expect(config.disabled_agents).toEqual([]);
+    expect(config.disabled_categories).toEqual([]);
     expect(config.disabled_mcps).toEqual([]);
     expect(config.disabled_skills).toEqual([]);
     expect(config.disabled_hooks).toEqual([]);
@@ -56,6 +57,7 @@ describe('plugin-config', () => {
   // user-level config
   "orchestration_mode": "multi-agent",
   "disabled_agents": ["user-agent"],
+  "disabled_categories": ["user-category"],
   "disabled_mcps": ["websearch"],
   "disabled_skills": ["user-skill"],
   "install_selection": {
@@ -81,6 +83,7 @@ describe('plugin-config', () => {
       `{
   "orchestration_mode": "skills-only",
   "disabled_agents": ["project-agent", "user-agent"],
+  "disabled_categories": ["project-category"],
   "disabled_mcps": ["context7"],
   "disabled_skills": ["project-skill"],
   "disabled_hooks": ["hook-project"],
@@ -105,6 +108,7 @@ describe('plugin-config', () => {
 
     expect(config.orchestration_mode).toBe('skills-only');
     expect(config.disabled_agents).toEqual(['user-agent', 'project-agent']);
+    expect(config.disabled_categories).toEqual(['user-category', 'project-category']);
     expect(config.disabled_mcps).toEqual(['websearch', 'context7']);
     expect(config.disabled_skills).toEqual(['user-skill', 'project-skill']);
     expect(config.disabled_hooks).toEqual(['hook-project']);
@@ -150,6 +154,7 @@ describe('plugin-config', () => {
     const partial = parseConfigPartially({
       orchestration_mode: 'skills-only',
       disabled_agents: ['valid-agent'],
+      disabled_categories: ['valid-category'],
       disabled_mcps: [123],
       backlog: {
         enabled: false,
@@ -162,6 +167,7 @@ describe('plugin-config', () => {
     expect(partial).not.toBeNull();
     expect(partial?.orchestration_mode).toBe('skills-only');
     expect(partial?.disabled_agents).toEqual(['valid-agent']);
+    expect(partial?.disabled_categories).toEqual(['valid-category']);
     expect(partial?.disabled_mcps).toBeUndefined();
     expect(partial?.backlog?.enabled).toBe(false);
     expect(partial?.browser).toBeUndefined();

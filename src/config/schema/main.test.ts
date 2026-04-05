@@ -9,6 +9,7 @@ describe('GstackConfigSchema', () => {
       expect(result.orchestration_mode).toBe('multi-agent');
       expect(result.disabled_skills).toHaveLength(0);
       expect(result.disabled_agents).toHaveLength(0);
+      expect(result.disabled_categories).toHaveLength(0);
       expect(result.disabled_mcps).toHaveLength(0);
       expect(result.disabled_hooks).toHaveLength(0);
       expect(result.backlog.enabled).toBe(true);
@@ -76,12 +77,14 @@ describe('GstackConfigSchema', () => {
       const result = GstackConfigSchema.parse({
         disabled_skills: [],
         disabled_agents: [],
+        disabled_categories: [],
         disabled_mcps: [],
         disabled_hooks: [],
       });
 
       expect(result.disabled_skills).toHaveLength(0);
       expect(result.disabled_agents).toHaveLength(0);
+      expect(result.disabled_categories).toHaveLength(0);
       expect(result.disabled_mcps).toHaveLength(0);
       expect(result.disabled_hooks).toHaveLength(0);
     });
@@ -90,12 +93,14 @@ describe('GstackConfigSchema', () => {
       const result = GstackConfigSchema.parse({
         disabled_skills: ['skill1', 'skill2'],
         disabled_agents: ['agent1'],
+        disabled_categories: ['category1'],
         disabled_mcps: ['websearch'],
         disabled_hooks: ['hook1'],
       });
 
       expect(result.disabled_skills).toEqual(['skill1', 'skill2']);
       expect(result.disabled_agents).toEqual(['agent1']);
+      expect(result.disabled_categories).toEqual(['category1']);
       expect(result.disabled_mcps).toEqual(['websearch']);
       expect(result.disabled_hooks).toEqual(['hook1']);
     });
@@ -212,6 +217,61 @@ describe('GstackConfigSchema', () => {
     });
   });
 
+  describe('#agent_registration config', () => {
+    it('applies defaults for agent registration', () => {
+      const result = GstackConfigSchema.parse({});
+      expect(result.agent_registration?.mode).toBe('curated');
+      expect(result.agent_registration?.suppress_host_builtins).toEqual(['build', 'plan']);
+    });
+
+    it('accepts curated and replace registration modes', () => {
+      const curated = GstackConfigSchema.parse({
+        agent_registration: {
+          mode: 'curated',
+          suppress_host_builtins: ['build', 'plan', 'title'],
+        },
+      });
+      expect(curated.agent_registration?.mode).toBe('curated');
+      expect(curated.agent_registration?.suppress_host_builtins).toContain('title');
+
+      const replace = GstackConfigSchema.parse({
+        agent_registration: {
+          mode: 'replace',
+          suppress_host_builtins: ['build', 'plan'],
+        },
+      });
+      expect(replace.agent_registration?.mode).toBe('replace');
+    });
+  });
+
+  describe('#categories and runtime fallback', () => {
+    it('accepts categories object', () => {
+      const result = GstackConfigSchema.parse({
+        categories: {
+          quick: { model: 'opencode/gpt-5-nano', textVerbosity: 'low' },
+          deep: { model: 'openai/gpt-5.3-codex' },
+        },
+      });
+      expect(result.categories?.quick).toBeDefined();
+      expect((result.categories?.quick as Record<string, unknown>).model).toBe(
+        'opencode/gpt-5-nano'
+      );
+    });
+
+    it('accepts runtime_fallback as boolean and object', () => {
+      const boolResult = GstackConfigSchema.parse({ runtime_fallback: true });
+      expect(boolResult.runtime_fallback).toBe(true);
+
+      const objectResult = GstackConfigSchema.parse({
+        runtime_fallback: {
+          enabled: true,
+          max_fallback_attempts: 3,
+        },
+      });
+      expect((objectResult.runtime_fallback as Record<string, unknown>).enabled).toBe(true);
+    });
+  });
+
   describe('#browser config', () => {
     it('accepts browser config', () => {
       const result = GstackConfigSchema.parse({
@@ -267,6 +327,7 @@ describe('GstackConfigSchema', () => {
         orchestration_mode: 'skills-only',
         disabled_skills: ['playwright'],
         disabled_agents: ['sisyphus'],
+        disabled_categories: ['ultrabrain'],
         disabled_mcps: ['websearch'],
         disabled_hooks: ['before-tool'],
         agents: {
@@ -284,6 +345,18 @@ describe('GstackConfigSchema', () => {
             api_key: 'secret',
             enabled: true,
           },
+        },
+        categories: {
+          quick: {
+            model: 'opencode/gpt-5-nano',
+          },
+        },
+        runtime_fallback: {
+          enabled: true,
+        },
+        agent_registration: {
+          mode: 'curated',
+          suppress_host_builtins: ['build', 'plan'],
         },
         backlog: {
           enabled: true,
@@ -304,7 +377,11 @@ describe('GstackConfigSchema', () => {
       expect(result.orchestration_mode).toBe('skills-only');
       expect(result.disabled_skills).toContain('playwright');
       expect(result.disabled_agents).toContain('sisyphus');
+      expect(result.disabled_categories).toContain('ultrabrain');
       expect(result.agents?.sisyphus.model).toBe('gpt-4');
+      expect(result.agent_registration?.mode).toBe('curated');
+      expect(result.categories?.quick).toBeDefined();
+      expect((result.runtime_fallback as Record<string, unknown>).enabled).toBe(true);
       expect(result.backlog.auto_create_tasks).toBe(false);
       expect(result.browser?.headless).toBe(false);
       expect(result.telemetry?.supabase?.url).toBe('https://test.supabase.co');
