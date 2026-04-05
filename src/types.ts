@@ -17,3 +17,4 @@ export type {
   SprintLogEntry,
   SessionState,
 } from './types/orchestrator.ts';
+export type { HookEventName, HookDefinition, HookRegistry, HookHandler } from './types/hooks.ts';

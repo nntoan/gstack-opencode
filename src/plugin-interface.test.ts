@@ -8,6 +8,7 @@ import type { Managers } from './create-managers.ts';
 import { GstackConfigSchema } from './config/schema/index.ts';
 import type { GstackAgent } from './types/agent.ts';
 import type { BuiltinSkill } from './types/skill.ts';
+import type { HookRegistry } from './types/hooks.ts';
 
 describe('createPluginInterface', () => {
   const defaultConfig = GstackConfigSchema.parse({}) as GstackConfig;
@@ -35,11 +36,17 @@ describe('createPluginInterface', () => {
     delegate: () => null,
   };
 
+  const mockHookRegistry: HookRegistry = {
+    register: () => {},
+    dispatch: async () => {},
+    getHandlerCount: () => 0,
+  };
+
   const baseParams = {
     ctx: { directory: '/tmp' },
     pluginConfig: defaultConfig,
     managers: mockManagers,
-    hooks: {},
+    hooks: mockHookRegistry,
     tools: {},
     orchestrator: mockOrchestrator,
     delegationState: new DelegationStateManager(),
@@ -88,16 +95,20 @@ describe('createPluginInterface', () => {
     }
   });
 
-  it('experimental.chat.system.transform returns undefined with no sessionID', async () => {
+  it('experimental.chat.system.transform is a no-op with no sessionID', async () => {
     const pi = createPluginInterface(baseParams);
     const handler = pi['experimental.chat.system.transform'] as Function;
-    await expect(handler({})).resolves.toBeUndefined();
+    const output = { system: [] };
+    await handler({}, output);
+    expect(output.system).toHaveLength(0);
   });
 
-  it('experimental.chat.system.transform returns undefined with no stored delegation', async () => {
+  it('experimental.chat.system.transform is a no-op with no stored delegation', async () => {
     const pi = createPluginInterface(baseParams);
     const handler = pi['experimental.chat.system.transform'] as Function;
-    await expect(handler({ sessionID: 'ses_unknown' })).resolves.toBeUndefined();
+    const output = { system: [] };
+    await handler({ sessionID: 'ses_unknown' }, output);
+    expect(output.system).toHaveLength(0);
   });
 
   it('chat.message calls orchestrator classify+delegate in multi-agent mode', async () => {
@@ -118,7 +129,10 @@ describe('createPluginInterface', () => {
       orchestrator: trackingOrchestrator,
     });
     const handler = pi['chat.message'] as Function;
-    await handler({ text: '/review' });
+    await handler(
+      { sessionID: 'ses_test' },
+      { message: null, parts: [{ type: 'text', text: '/review' }] }
+    );
     expect(classified).toBe(true);
   });
 
@@ -180,7 +194,10 @@ describe('createPluginInterface', () => {
     });
 
     const chatHandler = pi['chat.message'] as Function;
-    await chatHandler({ sessionID: 'ses_abc123', text: 'implement this feature' });
+    await chatHandler(
+      { sessionID: 'ses_abc123' },
+      { message: null, parts: [{ type: 'text', text: 'implement this feature' }] }
+    );
 
     const stored = delegationState.getDelegation('ses_abc123');
     expect(stored).not.toBeNull();
@@ -224,12 +241,15 @@ describe('createPluginInterface', () => {
     });
 
     const chatHandler = pi['chat.message'] as Function;
-    await chatHandler({ text: 'implement this feature' });
+    await chatHandler(
+      {},
+      { message: null, parts: [{ type: 'text', text: 'implement this feature' }] }
+    );
 
     expect(delegationState.getDelegation('')).toBeNull();
   });
 
-  it('experimental.chat.system.transform injects delegation context into system prompt', async () => {
+  it('experimental.chat.system.transform injects delegation context into system array', async () => {
     const builderAgent: GstackAgent = {
       role: 'builder',
       name: 'builder',
@@ -253,18 +273,20 @@ describe('createPluginInterface', () => {
 
     const pi = createPluginInterface({ ...baseParams, delegationState });
     const handler = pi['experimental.chat.system.transform'] as Function;
-    const result = await handler({ sessionID: 'ses_transform', system: 'Original system prompt.' });
+    const output = { system: ['Original system prompt.'] };
+    await handler({ sessionID: 'ses_transform' }, output);
 
-    expect(result).not.toBeUndefined();
-    expect(result.system).toContain('Original system prompt.');
-    expect(result.system).toContain('## Active Agent Context');
-    expect(result.system).toContain('**Agent:** builder (builder)');
-    expect(result.system).toContain('**Sprint Phase:** build');
-    expect(result.system).toContain('Build things carefully.');
-    expect(result.system).toContain('#### /implement');
+    const joined = output.system.join('\n');
+    expect(output.system.length).toBeGreaterThan(1);
+    expect(joined).toContain('Original system prompt.');
+    expect(joined).toContain('## Active Agent Context');
+    expect(joined).toContain('**Agent:** builder (builder)');
+    expect(joined).toContain('**Sprint Phase:** build');
+    expect(joined).toContain('Build things carefully.');
+    expect(joined).toContain('#### /implement');
   });
 
-  it('experimental.chat.system.transform uses context as sole system when no original exists', async () => {
+  it('experimental.chat.system.transform adds context even with empty system array', async () => {
     const builderAgent: GstackAgent = {
       role: 'builder',
       name: 'builder',
@@ -283,10 +305,11 @@ describe('createPluginInterface', () => {
 
     const pi = createPluginInterface({ ...baseParams, delegationState });
     const handler = pi['experimental.chat.system.transform'] as Function;
-    const result = await handler({ sessionID: 'ses_new' });
+    const output = { system: [] };
+    await handler({ sessionID: 'ses_new' }, output);
 
-    expect(result).not.toBeUndefined();
-    expect(result.system).toContain('## Active Agent Context');
+    expect(output.system.length).toBeGreaterThan(0);
+    expect(output.system.join('\n')).toContain('## Active Agent Context');
   });
 
   it('event session.deleted clears delegation state', async () => {
