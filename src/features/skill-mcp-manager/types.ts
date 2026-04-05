@@ -12,18 +12,10 @@ export interface SkillMcpServerContext {
   skillName: string;
 }
 
-export interface ManagedClient {
-  client: Client;
-  skillName: string;
-  lastUsedAt: number;
-  connectionType: 'local' | 'stdio' | 'remote';
-}
-
 export interface SkillMcpManagerState {
   clients: Map<string, Client>;
   pendingConnections: Map<string, Promise<Client>>;
   disconnectedSessions: Map<string, number>;
-  idleTimeoutMs: number;
   disposed: boolean;
 }
 

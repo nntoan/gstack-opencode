@@ -1,5 +1,5 @@
 import { createWebsearchConfig } from './websearch.ts';
-import { context7 } from './context7.ts';
+import { createContext7Config } from './context7.ts';
 import { grep_app } from './grep-app.ts';
 import { createContexthubConfig } from './contexthub.ts';
 import { createBacklogMdConfig } from './backlog-md.ts';
@@ -12,16 +12,16 @@ type McpServerConfig = RemoteMcpConfig | StdioMcpConfig | LocalMcpConfig;
 
 export function createBuiltinMcps(
   disabledMcps: string[] = [],
-  _config?: GstackConfig
+  config?: GstackConfig
 ): Record<string, McpServerConfig> {
   const mcps: Record<string, McpServerConfig> = {};
 
   if (!disabledMcps.includes('websearch')) {
-    mcps.websearch = createWebsearchConfig(undefined);
+    mcps.websearch = createWebsearchConfig(config?.mcp?.websearch);
   }
 
   if (!disabledMcps.includes('context7')) {
-    mcps.context7 = context7;
+    mcps.context7 = createContext7Config(config?.mcp?.context7);
   }
 
   if (!disabledMcps.includes('grep_app')) {

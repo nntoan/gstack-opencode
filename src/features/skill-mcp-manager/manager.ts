@@ -11,7 +11,6 @@ export class SkillMcpManager {
     clients: new Map(),
     pendingConnections: new Map(),
     disconnectedSessions: new Map(),
-    idleTimeoutMs: 5 * 60 * 1000,
     disposed: false,
   };
 

@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { createBuiltinMcps, McpNameSchema } from './index.ts';
+import { createWebsearchConfig } from './websearch.ts';
+import { createContext7Config } from './context7.ts';
 
 describe('createBuiltinMcps', () => {
   it('returns all 5 MCP configs when nothing is disabled', () => {
@@ -97,6 +99,94 @@ describe('createBuiltinMcps', () => {
       backlog: { enabled: true, auto_create_tasks: true, auto_update_status: true },
     });
     expect(Object.keys(mcps)).toHaveLength(5);
+  });
+
+  it('passes websearch config through to createWebsearchConfig', () => {
+    const mcps = createBuiltinMcps([], {
+      orchestration_mode: 'multi-agent',
+      disabled_skills: [],
+      disabled_agents: [],
+      disabled_categories: [],
+      disabled_mcps: [],
+      disabled_hooks: [],
+      backlog: { enabled: true, auto_create_tasks: true, auto_update_status: true },
+      mcp: { websearch: { provider: 'tavily', api_key: 'test-key' } },
+    });
+    expect(mcps.websearch.type).toBe('remote');
+    if (mcps.websearch.type === 'remote') {
+      expect(mcps.websearch.url).toContain('tavily.com');
+      expect(mcps.websearch.headers?.Authorization).toBe('Bearer test-key');
+    }
+  });
+
+  it('passes context7 config through to createContext7Config', () => {
+    const mcps = createBuiltinMcps([], {
+      orchestration_mode: 'multi-agent',
+      disabled_skills: [],
+      disabled_agents: [],
+      disabled_categories: [],
+      disabled_mcps: [],
+      disabled_hooks: [],
+      backlog: { enabled: true, auto_create_tasks: true, auto_update_status: true },
+      mcp: { context7: { api_key: 'c7-test-key' } },
+    });
+    expect(mcps.context7.type).toBe('remote');
+    if (mcps.context7.type === 'remote') {
+      expect(mcps.context7.headers?.Authorization).toBe('Bearer c7-test-key');
+    }
+  });
+});
+
+describe('createWebsearchConfig', () => {
+  it('defaults to exa provider when no config is provided', () => {
+    const config = createWebsearchConfig();
+    expect(config.type).toBe('remote');
+    expect(config.url).toContain('exa.ai');
+  });
+
+  it('uses exa provider with api_key from config', () => {
+    const config = createWebsearchConfig({ provider: 'exa', api_key: 'exa-key-123' });
+    expect(config.url).toContain('exa.ai');
+    expect(config.url).toContain('exa-key-123');
+    expect(config.headers?.['x-api-key']).toBe('exa-key-123');
+  });
+
+  it('uses tavily provider when specified', () => {
+    const config = createWebsearchConfig({ provider: 'tavily' });
+    expect(config.url).toContain('tavily.com');
+  });
+
+  it('uses tavily provider with api_key from config', () => {
+    const config = createWebsearchConfig({ provider: 'tavily', api_key: 'tavily-key-456' });
+    expect(config.url).toContain('tavily.com');
+    expect(config.headers?.Authorization).toBe('Bearer tavily-key-456');
+  });
+
+  it('exa api_key is URL-encoded', () => {
+    const config = createWebsearchConfig({ provider: 'exa', api_key: 'key with spaces&chars' });
+    expect(config.url).toContain(encodeURIComponent('key with spaces&chars'));
+  });
+});
+
+describe('createContext7Config', () => {
+  it('returns remote config with correct URL', () => {
+    const config = createContext7Config();
+    expect(config.type).toBe('remote');
+    expect(config.url).toBe('https://mcp.context7.com/mcp');
+    expect(config.enabled).toBe(true);
+  });
+
+  it('uses api_key from config when no env var is set', () => {
+    const config = createContext7Config({ api_key: 'c7-key-789' });
+    expect(config.headers?.Authorization).toBe('Bearer c7-key-789');
+  });
+
+  it('returns no auth header when no key is available', () => {
+    const config = createContext7Config();
+    // When no env var and no config key, headers should be undefined
+    if (!process.env.CONTEXT7_API_KEY) {
+      expect(config.headers).toBeUndefined();
+    }
   });
 });
 

@@ -10,7 +10,10 @@ export function mergeConfigs(base: GstackConfig, override: Partial<GstackConfig>
       (override.install_selection ?? {}) as Record<string, unknown>
     ) as GstackConfig['install_selection'],
     agents: deepMerge(base.agents ?? {}, override.agents ?? {}),
-    mcp: deepMerge(base.mcp ?? {}, override.mcp ?? {}),
+    mcp: deepMerge(
+      (base.mcp ?? {}) as Record<string, unknown>,
+      (override.mcp ?? {}) as Record<string, unknown>
+    ) as GstackConfig['mcp'],
     disabled_agents: [
       ...new Set([...(base.disabled_agents ?? []), ...(override.disabled_agents ?? [])]),
     ],

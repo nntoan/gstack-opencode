@@ -46,6 +46,25 @@ export interface McpOverrideConfig {
   api_key?: string;
 }
 
+export interface WebsearchMcpOverride {
+  provider?: 'exa' | 'tavily';
+  api_key?: string;
+  enabled?: boolean;
+}
+
+export interface Context7McpOverride {
+  api_key?: string;
+  enabled?: boolean;
+}
+
+export interface McpProviderConfig {
+  websearch?: WebsearchMcpOverride;
+  context7?: Context7McpOverride;
+  contexthub?: McpOverrideConfig;
+  grep_app?: McpOverrideConfig;
+  backlog_md?: McpOverrideConfig;
+}
+
 export interface BrowserConfig {
   headless: boolean;
   timeout_ms: number;
@@ -74,7 +93,7 @@ export interface GstackConfig {
   agents?: Record<string, AgentOverrideConfig>;
   categories?: Record<string, CategoryOverrideConfig>;
   runtime_fallback?: RuntimeFallbackConfig;
-  mcp?: Record<string, McpOverrideConfig>;
+  mcp?: McpProviderConfig;
   backlog: BacklogConfig;
   browser?: BrowserConfig;
   telemetry?: TelemetryConfig;
