@@ -29,6 +29,8 @@ import {
   createScorecardHook,
   createDelegationContextHook,
   createSprintLogHook,
+  createSkillUsageHook,
+  createSessionTrackingHook,
 } from './features/quality-scorecard/index.ts';
 
 export function createHooks(params: {
@@ -95,6 +97,12 @@ export function createHooks(params: {
   registry.register(createScorecardHook({ workspaceState, analytics: params.managers.analytics }));
   registry.register(createDelegationContextHook({ workspaceState, delegationState }));
   registry.register(createSprintLogHook({ analytics: params.managers.analytics, delegationState }));
+
+  // --- Phase 7: Data pipeline hooks ---
+  registry.register(
+    createSkillUsageHook({ analytics: params.managers.analytics, delegationState })
+  );
+  registry.register(createSessionTrackingHook({ workspaceState, delegationState }));
 
   return registry;
 }

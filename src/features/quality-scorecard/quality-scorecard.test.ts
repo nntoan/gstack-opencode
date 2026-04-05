@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import { createScorecardHook } from './scorecard-hook.ts';
 import { createDelegationContextHook } from './delegation-context-hook.ts';
 import { createSprintLogHook } from './sprint-log-hook.ts';
+import { createSkillUsageHook } from './skill-usage-hook.ts';
+import { createSessionTrackingHook } from './session-tracking-hook.ts';
 import type {
   BoulderState,
   PlanProgress,
@@ -12,8 +14,13 @@ import type { ShipReadiness } from '../workspace-state/review-dashboard.ts';
 import type { DelegationResult } from '../orchestrator/index.ts';
 import type { GstackAgent, SprintPhase } from '../../types/agent.ts';
 import type { SkillUsageEvent, SprintLogEvent } from '../analytics/index.ts';
+import type { BuiltinSkill } from '../../types/skill.ts';
 
 // --- Fakes ---
+
+function makeSkill(name: string): BuiltinSkill {
+  return { name, description: '', template: '' };
+}
 
 function makeAgent(role: string = 'builder', phase: SprintPhase = 'build'): GstackAgent {
   return {
@@ -26,10 +33,14 @@ function makeAgent(role: string = 'builder', phase: SprintPhase = 'build'): Gsta
   };
 }
 
-function makeDelegation(phase: SprintPhase = 'build', role: string = 'builder'): DelegationResult {
+function makeDelegation(
+  phase: SprintPhase = 'build',
+  role: string = 'builder',
+  skills: BuiltinSkill[] = []
+): DelegationResult {
   return {
     agent: makeAgent(role, phase),
-    skills: [],
+    skills,
     phase,
     reasoning: 'test',
   };
@@ -39,14 +50,18 @@ interface FakeAnalyticsOpts {
   recentSkills?: SkillUsageEvent[];
   phaseHistory?: SprintLogEvent[];
   loggedEvents?: SprintLogEvent[];
+  recordedUsage?: SkillUsageEvent[];
 }
 
 function makeFakeAnalytics(opts: FakeAnalyticsOpts = {}) {
   const loggedEvents: SprintLogEvent[] = opts.loggedEvents ?? [];
   const phaseHistory: SprintLogEvent[] = opts.phaseHistory ?? [];
+  const recordedUsage: SkillUsageEvent[] = opts.recordedUsage ?? [];
   return {
     skillUsage: {
-      record: () => {},
+      record: (event: SkillUsageEvent) => {
+        recordedUsage.push(event);
+      },
       getRecent: (_limit: number): SkillUsageEvent[] => opts.recentSkills ?? [],
     },
     eureka: {
@@ -69,6 +84,7 @@ function makeFakeAnalytics(opts: FakeAnalyticsOpts = {}) {
       }),
     },
     loggedEvents,
+    recordedUsage,
   };
 }
 
@@ -77,6 +93,7 @@ interface FakeWorkspaceStateOpts {
   progress?: PlanProgress;
   reviews?: ReviewDashboardEntry[];
   shipReadiness?: ShipReadiness;
+  startedSessions?: SessionRecord[];
 }
 
 function makeFakeWorkspaceState(opts: FakeWorkspaceStateOpts = {}) {
@@ -84,14 +101,7 @@ function makeFakeWorkspaceState(opts: FakeWorkspaceStateOpts = {}) {
   const readiness: ShipReadiness = opts.shipReadiness ?? { ready: false, missing: ['eng:passed'] };
   const progress: PlanProgress = opts.progress ?? { total: 5, completed: 2, isComplete: false };
   const boulderState = opts.boulderState === undefined ? null : opts.boulderState;
-
-  const fakeRecord: SessionRecord = {
-    sessionId: 'fake',
-    startedAt: new Date().toISOString(),
-    phase: 'build',
-    agent: 'builder',
-    status: 'active',
-  };
+  const startedSessions: SessionRecord[] = opts.startedSessions ?? [];
 
   return {
     boulder: {
@@ -107,9 +117,24 @@ function makeFakeWorkspaceState(opts: FakeWorkspaceStateOpts = {}) {
       find: () => [],
     },
     sessions: {
-      start: async (): Promise<SessionRecord> => fakeRecord,
+      start: async (
+        sessionId: string,
+        phase: SessionRecord['phase'],
+        agent: string
+      ): Promise<SessionRecord> => {
+        const record: SessionRecord = {
+          sessionId,
+          startedAt: new Date().toISOString(),
+          phase,
+          agent,
+          status: 'active',
+        };
+        startedSessions.push(record);
+        return record;
+      },
       complete: async (): Promise<SessionRecord | null> => null,
-      getActive: async (): Promise<SessionRecord[]> => [],
+      getActive: async (): Promise<SessionRecord[]> =>
+        startedSessions.filter((r) => r.status === 'active'),
       cleanup: async (): Promise<number> => 0,
     },
     reviews: {
@@ -123,6 +148,7 @@ function makeFakeWorkspaceState(opts: FakeWorkspaceStateOpts = {}) {
       list: async () => [] as string[],
     }),
     ensureDir: () => {},
+    startedSessions,
   };
 }
 
@@ -511,5 +537,240 @@ describe('createSprintLogHook', () => {
     expect(analytics.loggedEvents[1].action).toBe('completed');
     expect(analytics.loggedEvents[2].phase).toBe('review');
     expect(analytics.loggedEvents[2].action).toBe('started');
+  });
+});
+
+// --- Skill Usage Hook Tests ---
+
+describe('createSkillUsageHook', () => {
+  it('has correct name and event', () => {
+    const hook = createSkillUsageHook({
+      analytics: makeFakeAnalytics() as ReturnType<
+        typeof import('../analytics/index.ts').createAnalytics
+      >,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    expect(hook.name).toBe('skill-usage-recorder');
+    expect(hook.event).toBe('chat.message');
+  });
+
+  it('does nothing when sessionID is absent', async () => {
+    const analytics = makeFakeAnalytics();
+    const hook = createSkillUsageHook({
+      analytics: analytics as ReturnType<typeof import('../analytics/index.ts').createAnalytics>,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({}, {});
+    expect(analytics.recordedUsage).toHaveLength(0);
+  });
+
+  it('does nothing when no delegation for session', async () => {
+    const analytics = makeFakeAnalytics();
+    const hook = createSkillUsageHook({
+      analytics: analytics as ReturnType<typeof import('../analytics/index.ts').createAnalytics>,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    expect(analytics.recordedUsage).toHaveLength(0);
+  });
+
+  it('does nothing when delegation has no skills', async () => {
+    const analytics = makeFakeAnalytics();
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('build', 'builder', []));
+    const hook = createSkillUsageHook({
+      analytics: analytics as ReturnType<typeof import('../analytics/index.ts').createAnalytics>,
+      delegationState: makeFakeDelegationState(
+        delegations
+      ) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    expect(analytics.recordedUsage).toHaveLength(0);
+  });
+
+  it('records one event per skill in delegation', async () => {
+    const analytics = makeFakeAnalytics();
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set(
+      'sess-1',
+      makeDelegation('build', 'builder', [makeSkill('build-skill'), makeSkill('test-skill')])
+    );
+    const hook = createSkillUsageHook({
+      analytics: analytics as ReturnType<typeof import('../analytics/index.ts').createAnalytics>,
+      delegationState: makeFakeDelegationState(
+        delegations
+      ) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    expect(analytics.recordedUsage).toHaveLength(2);
+    expect(analytics.recordedUsage[0].skillName).toBe('build-skill');
+    expect(analytics.recordedUsage[1].skillName).toBe('test-skill');
+  });
+
+  it('records events with correct shape', async () => {
+    const analytics = makeFakeAnalytics();
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('plan', 'planner', [makeSkill('plan-skill')]));
+    const hook = createSkillUsageHook({
+      analytics: analytics as ReturnType<typeof import('../analytics/index.ts').createAnalytics>,
+      delegationState: makeFakeDelegationState(
+        delegations
+      ) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    expect(analytics.recordedUsage).toHaveLength(1);
+    const event = analytics.recordedUsage[0];
+    expect(event.skillName).toBe('plan-skill');
+    expect(event.duration).toBe(0);
+    expect(event.success).toBe(true);
+    expect(event.phase).toBe('plan');
+    expect(event.version).toBe('0.7.0');
+    expect(typeof event.timestamp).toBe('string');
+  });
+
+  it('records for multiple different sessions independently', async () => {
+    const analytics = makeFakeAnalytics();
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('build', 'builder', [makeSkill('s1')]));
+    delegations.set(
+      'sess-2',
+      makeDelegation('review', 'reviewer', [makeSkill('s2'), makeSkill('s3')])
+    );
+    const hook = createSkillUsageHook({
+      analytics: analytics as ReturnType<typeof import('../analytics/index.ts').createAnalytics>,
+      delegationState: makeFakeDelegationState(
+        delegations
+      ) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    await hook.handler({ sessionID: 'sess-2' }, {});
+    expect(analytics.recordedUsage).toHaveLength(3);
+  });
+});
+
+// --- Session Tracking Hook Tests ---
+
+describe('createSessionTrackingHook', () => {
+  it('has correct name and event', () => {
+    const hook = createSessionTrackingHook({
+      workspaceState: makeFakeWorkspaceState() as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    expect(hook.name).toBe('session-tracking');
+    expect(hook.event).toBe('chat.message');
+  });
+
+  it('does nothing when sessionID is absent', async () => {
+    const ws = makeFakeWorkspaceState();
+    const hook = createSessionTrackingHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({}, {});
+    expect(ws.startedSessions).toHaveLength(0);
+  });
+
+  it('does nothing when no delegation for session', async () => {
+    const ws = makeFakeWorkspaceState();
+    const hook = createSessionTrackingHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    expect(ws.startedSessions).toHaveLength(0);
+  });
+
+  it('starts session on first delegation', async () => {
+    const ws = makeFakeWorkspaceState();
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('build', 'builder'));
+    const hook = createSessionTrackingHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState(
+        delegations
+      ) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    expect(ws.startedSessions).toHaveLength(1);
+    expect(ws.startedSessions[0].sessionId).toBe('sess-1');
+    expect(ws.startedSessions[0].phase).toBe('build');
+    expect(ws.startedSessions[0].agent).toBe('builder');
+  });
+
+  it('does not start session twice for the same sessionID', async () => {
+    const ws = makeFakeWorkspaceState();
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('build', 'builder'));
+    const hook = createSessionTrackingHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState(
+        delegations
+      ) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    expect(ws.startedSessions).toHaveLength(1);
+  });
+
+  it('starts separate sessions for different sessionIDs', async () => {
+    const ws = makeFakeWorkspaceState();
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('build', 'builder'));
+    delegations.set('sess-2', makeDelegation('review', 'reviewer'));
+    const hook = createSessionTrackingHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState(
+        delegations
+      ) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    await hook.handler({ sessionID: 'sess-2' }, {});
+    expect(ws.startedSessions).toHaveLength(2);
+    expect(ws.startedSessions[0].sessionId).toBe('sess-1');
+    expect(ws.startedSessions[1].sessionId).toBe('sess-2');
+  });
+
+  it('handles errors from sessions.start gracefully', async () => {
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-err', makeDelegation('build', 'builder'));
+    const fakeWsWithError = {
+      ...makeFakeWorkspaceState(),
+      sessions: {
+        start: async (): Promise<SessionRecord> => {
+          throw new Error('disk full');
+        },
+        complete: async (): Promise<SessionRecord | null> => null,
+        getActive: async (): Promise<SessionRecord[]> => [],
+        cleanup: async (): Promise<number> => 0,
+      },
+    };
+    const hook = createSessionTrackingHook({
+      workspaceState: fakeWsWithError as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState(
+        delegations
+      ) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    // Should not throw
+    await expect(hook.handler({ sessionID: 'sess-err' }, {})).resolves.toBeUndefined();
   });
 });

@@ -83,6 +83,63 @@ describe('classifyIntent', () => {
     });
     expect(canResult.phase).toBe('think');
   });
+
+  // --- Phase 7C: overbreadth fixes ---
+
+  it('does not classify "inspect" as plan phase', () => {
+    const result = classifyIntent('inspect the code quality', { orchestrationMode: 'multi-agent' });
+    expect(result.phase).not.toBe('plan');
+  });
+
+  it('does not classify "improve performance" as reflect phase', () => {
+    const result = classifyIntent('improve performance of the API', {
+      orchestrationMode: 'multi-agent',
+    });
+    expect(result.phase).not.toBe('reflect');
+  });
+
+  it('does not classify "what went wrong" as reflect phase', () => {
+    const result = classifyIntent('what went wrong with the deployment?', {
+      orchestrationMode: 'multi-agent',
+    });
+    expect(result.phase).not.toBe('reflect');
+  });
+
+  it('classifies "what went well" as reflect phase', () => {
+    const result = classifyIntent('what went well in the sprint?', {
+      orchestrationMode: 'multi-agent',
+    });
+    expect(result.phase).toBe('reflect');
+  });
+
+  it('routes debug questions to test phase', () => {
+    const result = classifyIntent('Why is CI red?', { orchestrationMode: 'multi-agent' });
+    expect(result.phase).toBe('test');
+    expect(result.suggestedAgent).toBe('qa-lead');
+  });
+
+  it('routes "why is this failing" to test phase', () => {
+    const result = classifyIntent('Why is this failing?', { orchestrationMode: 'multi-agent' });
+    expect(result.phase).toBe('test');
+  });
+
+  it('classifies root cause and triage as test phase', () => {
+    const rc = classifyIntent('find the root cause of this', { orchestrationMode: 'multi-agent' });
+    expect(rc.phase).toBe('test');
+    const tr = classifyIntent('triage this issue', { orchestrationMode: 'multi-agent' });
+    expect(tr.phase).toBe('test');
+  });
+
+  it('classifies roadmap as think phase', () => {
+    const result = classifyIntent('roadmap for next quarter', { orchestrationMode: 'multi-agent' });
+    expect(result.phase).toBe('think');
+  });
+
+  it('prefers build over other phases when tied', () => {
+    // "update" matches build, "check" matches review — tied at score 1, build wins by priority
+    const result = classifyIntent('update and check', { orchestrationMode: 'multi-agent' });
+    expect(result.phase).toBe('build');
+  });
 });
 
 describe('orchestrator mappings', () => {
@@ -92,6 +149,18 @@ describe('orchestrator mappings', () => {
 
   it('contains phase patterns for all sprint phases', () => {
     expect(PHASE_PATTERNS.size).toBe(9);
+  });
+
+  it('contains the correct number of patterns per phase', () => {
+    expect(PHASE_PATTERNS.get('think')).toHaveLength(21);
+    expect(PHASE_PATTERNS.get('plan')).toHaveLength(14);
+    expect(PHASE_PATTERNS.get('build')).toHaveLength(16);
+    expect(PHASE_PATTERNS.get('review')).toHaveLength(14);
+    expect(PHASE_PATTERNS.get('test')).toHaveLength(21);
+    expect(PHASE_PATTERNS.get('ship')).toHaveLength(12);
+    expect(PHASE_PATTERNS.get('reflect')).toHaveLength(7);
+    expect(PHASE_PATTERNS.get('cross-cutting')).toHaveLength(8);
+    expect(PHASE_PATTERNS.get('utility')).toHaveLength(5);
   });
 
   it('contains default agent for all sprint phases', () => {

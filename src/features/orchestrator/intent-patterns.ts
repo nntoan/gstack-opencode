@@ -22,6 +22,9 @@ export const PHASE_PATTERNS: Map<SprintPhase, RegExp[]> = new Map([
       /how.?about/i,
       /pros.?and.?cons/i,
       /trade.?off/i,
+      /\bexplain\b/i,
+      /\broadmap\b/i,
+      /\bmilestone\b/i,
     ],
   ],
   [
@@ -37,7 +40,7 @@ export const PHASE_PATTERNS: Map<SprintPhase, RegExp[]> = new Map([
       /scope/i,
       /estimate/i,
       /requirement/i,
-      /spec/i,
+      /\bspec\b/i,
       /rfc/i,
       /how.?should.?we/i,
       /technical.?design/i,
@@ -78,6 +81,9 @@ export const PHASE_PATTERNS: Map<SprintPhase, RegExp[]> = new Map([
       /feedback/i,
       /\bcritique\b/i,
       /\bassess\b/i,
+      /\bsanity.?check\b/i,
+      /\btake.?a.?look\b/i,
+      /\bwalk.?(?:me\s+)?through\b/i,
     ],
   ],
   [
@@ -100,6 +106,10 @@ export const PHASE_PATTERNS: Map<SprintPhase, RegExp[]> = new Map([
       /trace/i,
       /diagnose/i,
       /reproduce/i,
+      /\broot.?cause\b/i,
+      /\btriage\b/i,
+      /\bstack.?trace\b/i,
+      /\btimeout\b/i,
     ],
   ],
   [
@@ -127,8 +137,7 @@ export const PHASE_PATTERNS: Map<SprintPhase, RegExp[]> = new Map([
       /\bstats\b/i,
       /how.?did.?we.?do/i,
       /lessons?\s*learn/i,
-      /what.?went/i,
-      /improve/i,
+      /what.?went.?(?:well|poorly|right)/i,
       /sprint.?review/i,
     ],
   ],
@@ -187,3 +196,12 @@ export const PHASE_TO_DEFAULT_AGENT: Readonly<Record<SprintPhase, AgentRole>> = 
   'cross-cutting': 'safety-guard',
   utility: 'upgrader',
 };
+
+/**
+ * Fallback patterns for question routing when no phase pattern matched.
+ * Debug-oriented questions route to test/qa-lead instead of think/ceo.
+ */
+export const DEBUG_QUESTION_PATTERNS: RegExp[] = [
+  /^why\b.*(?:fail|error|break|crash|red|wrong|broken|slow|timeout)/i,
+  /^(?:what|where)\b.*(?:error|exception|stack.?trace|crash)/i,
+];

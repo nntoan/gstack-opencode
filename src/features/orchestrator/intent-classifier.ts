@@ -1,8 +1,25 @@
 import type { SprintPhase } from '../../types/agent.ts';
 import type { ClassifiedIntent, IntentClassifierOptions } from './types.ts';
-import { PHASE_PATTERNS, PHASE_TO_DEFAULT_AGENT, SKILL_TO_PHASE_MAP } from './intent-patterns.ts';
+import {
+  DEBUG_QUESTION_PATTERNS,
+  PHASE_PATTERNS,
+  PHASE_TO_DEFAULT_AGENT,
+  SKILL_TO_PHASE_MAP,
+} from './intent-patterns.ts';
 
 const EXPLICIT_SKILL_REGEX = /^\/([a-z][a-z0-9-]*)/;
+
+const PHASE_PRIORITY: readonly SprintPhase[] = [
+  'build',
+  'test',
+  'review',
+  'plan',
+  'ship',
+  'reflect',
+  'think',
+  'cross-cutting',
+  'utility',
+];
 
 export function extractExplicitSkillName(text: string): string | null {
   const match: RegExpMatchArray | null = text.trim().match(EXPLICIT_SKILL_REGEX);
@@ -43,6 +60,18 @@ export function classifyIntent(text: string, options: IntentClassifierOptions): 
   }
 
   if (phaseScores.length === 0) {
+    const isDebugQuestion = DEBUG_QUESTION_PATTERNS.some((p) => p.test(text.trim()));
+
+    if (isDebugQuestion) {
+      return {
+        phase: 'test',
+        confidence: 0.5,
+        suggestedAgent: 'qa-lead',
+        suggestedSkills: getSuggestedSkillsForPhase('test'),
+        reasoning: 'Debug question detected, routing to test phase',
+      };
+    }
+
     const isQuestion =
       /^(?:what|how|why|should|can|could|would|is|are|do|does)\b/i.test(text.trim()) ||
       /\?/.test(text);
@@ -82,7 +111,9 @@ export function classifyIntent(text: string, options: IntentClassifierOptions): 
     };
   }
 
-  const phase: SprintPhase = winners[0];
+  const phase: SprintPhase = winners.sort(
+    (a, b) => PHASE_PRIORITY.indexOf(a) - PHASE_PRIORITY.indexOf(b)
+  )[0];
   return {
     phase,
     confidence: scoreToMultiPhaseConfidence(maxScore),

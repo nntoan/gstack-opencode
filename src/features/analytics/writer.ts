@@ -2,12 +2,15 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { log } from '../../shared/logger.ts';
 
-export async function appendJsonl(filePath: string, event: Record<string, unknown>): Promise<void> {
+export function appendJsonl(filePath: string, event: Record<string, unknown>): void {
   try {
     mkdirSync(dirname(filePath), { recursive: true });
     appendFileSync(filePath, JSON.stringify(event) + '\n', 'utf-8');
-  } catch (error) {
-    log('[ERROR] Failed to write analytics event', { filePath, error: String(error) });
+  } catch (error: unknown) {
+    log('[ERROR] Failed to write analytics event', {
+      filePath,
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 

@@ -32,7 +32,12 @@ describe('createPluginInterface', () => {
         upsert: () => null,
       },
       plans: {} as unknown as Managers['workspaceState']['plans'],
-      sessions: {} as unknown as Managers['workspaceState']['sessions'],
+      sessions: {
+        start: async () => null as unknown,
+        complete: async () => null,
+        getActive: async () => [],
+        cleanup: async () => 0,
+      } as unknown as Managers['workspaceState']['sessions'],
       reviews: {} as unknown as Managers['workspaceState']['reviews'],
       notepads: () => ({}) as unknown as ReturnType<Managers['workspaceState']['notepads']>,
       ensureDir: () => {},

@@ -47,46 +47,48 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
       output: { message: unknown; parts: unknown[] } | undefined
     ): Promise<void> => {
       const parts = output?.parts ?? [];
+
+      if (pluginConfig.orchestration_mode === 'multi-agent') {
+        const text =
+          parts
+            .filter((p: unknown) => (p as { type?: string }).type === 'text')
+            .map(
+              (p: unknown) =>
+                (p as { text?: string; value?: string }).text ||
+                (p as { text?: string; value?: string }).value ||
+                ''
+            )
+            .join(' ') || '';
+
+        if (text) {
+          try {
+            const classified = orchestrator.classify(text);
+            const result = orchestrator.delegate(classified);
+            if (result) {
+              const sessionId = input?.sessionID ?? '';
+              if (sessionId) {
+                delegationState.setDelegation(sessionId, result);
+              }
+              log('[plugin-interface] delegated intent', {
+                phase: result.phase,
+                agent: result.agent.role,
+                skillCount: result.skills.length,
+              });
+            }
+          } catch (err: unknown) {
+            log('[plugin-interface] chat.message delegation error', {
+              error: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+      }
+
+      // Dispatch hooks AFTER delegation so hooks see the current delegation state
       await hooks.dispatch(
         'chat.message',
         { sessionID: input?.sessionID ?? '', text: '' },
         { parts }
       );
-
-      if (pluginConfig.orchestration_mode !== 'multi-agent') return;
-
-      const text =
-        parts
-          .filter((p: unknown) => (p as { type?: string }).type === 'text')
-          .map(
-            (p: unknown) =>
-              (p as { text?: string; value?: string }).text ||
-              (p as { text?: string; value?: string }).value ||
-              ''
-          )
-          .join(' ') || '';
-
-      if (!text) return;
-
-      try {
-        const classified = orchestrator.classify(text);
-        const result = orchestrator.delegate(classified);
-        if (result) {
-          const sessionId = input?.sessionID ?? '';
-          if (sessionId) {
-            delegationState.setDelegation(sessionId, result);
-          }
-          log('[plugin-interface] delegated intent', {
-            phase: result.phase,
-            agent: result.agent.role,
-            skillCount: result.skills.length,
-          });
-        }
-      } catch (err: unknown) {
-        log('[plugin-interface] chat.message delegation error', {
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
     },
 
     'experimental.chat.messages.transform': async (): Promise<void> => {},
@@ -117,6 +119,12 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
       if (input?.type === 'session.deleted') {
         const sessionID = input?.properties?.info?.id;
         if (sessionID) {
+          await managers.workspaceState.sessions.complete(sessionID).catch((err: unknown) => {
+            log('[ERROR] session complete failed', {
+              sessionID,
+              error: err instanceof Error ? err.message : String(err),
+            });
+          });
           await managers.skillMcpManager.disconnectSession(sessionID);
           delegationState.clearSession(sessionID);
           log('[plugin-interface] disconnected MCP session', { sessionID });
