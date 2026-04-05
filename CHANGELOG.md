@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.0](https://github.com/nntoan/gstack-opencode/compare/v0.4.3...v0.5.0) (2026-04-05)
+
+
+### Features
+
+* **orchestrator:** persist delegation context across plugin flow ([44869b0](https://github.com/nntoan/gstack-opencode/commit/44869b02ff5627f4928c5e86564e16804f168224))
+
+
+### Bug Fixes
+
+* **mcp:** support local MCP command arrays ([956dde6](https://github.com/nntoan/gstack-opencode/commit/956dde694a9e2485b07c26ed46fdd6a91a30ddf3))
+
 ## [0.4.3](https://github.com/nntoan/gstack-opencode/compare/v0.4.2...v0.4.3) (2026-04-03)
 
 
