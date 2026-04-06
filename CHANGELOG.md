@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.6.0](https://github.com/nntoan/gstack-opencode/compare/v0.5.0...v0.6.0) (2026-04-06)
+
+
+### Features
+
+* **config:** default to curated agent suppression and category presets ([2b791e6](https://github.com/nntoan/gstack-opencode/commit/2b791e652e2ed4a1ba1d74e0e880646a7f66a7a6))
+* **hooks:** add lifecycle hooks infrastructure with registry, truncator, and AGENTS.md injector ([daa94ef](https://github.com/nntoan/gstack-opencode/commit/daa94efb7afda6f25a23ad7b40787362d4263263))
+* implement Phase 2 — interview mode, quality gates, token budget, and slim mode ([5ea523d](https://github.com/nntoan/gstack-opencode/commit/5ea523ddbf0a3f0271edb26626456420cdadb878))
+* implement Phases 3-6 — wire brain, tools, session continuity, quality scorecards ([974df8b](https://github.com/nntoan/gstack-opencode/commit/974df8bac0a124fe49b50b95aa8c35c26a667460))
+* Phase 7 — close the loop on data pipelines, fix orchestration overbreadth ([f42bdfc](https://github.com/nntoan/gstack-opencode/commit/f42bdfc4d2302aeadd3b9f4b39a6b95a93d0daa4))
+
+
+### Bug Fixes
+
+* Phase 8A+8C — fix MCP config passthrough chain, clean dead SkillMcpManager scaffolding ([1953e86](https://github.com/nntoan/gstack-opencode/commit/1953e86502e4f9d1b0ba5b8c12297473a94499d7))
+
 ## [0.5.0](https://github.com/nntoan/gstack-opencode/compare/v0.4.3...v0.5.0) (2026-04-05)
 
 
