@@ -90,3 +90,60 @@ describe('Company default model contract', () => {
     expect(debugger_?.model).toBe('openai/gpt-5.4');
   });
 });
+
+describe('agents.company override loading', () => {
+  it('config.agents.company.model overrides the Company default model', () => {
+    const { agents } = createSkillsAndAgents(
+      baseConfig({
+        install_selection: { has_copilot: true },
+        agents: {
+          company: {
+            model: 'anthropic/claude-opus-4-6',
+          },
+        },
+      })
+    );
+
+    const company = agents.find((a) => a.role === 'company');
+    expect(company?.model).toBe('anthropic/claude-opus-4-6');
+  });
+
+  it('config.agents.company.instructions overrides Company instructions', () => {
+    const customInstructions = 'You are the Company. Delegate everything.';
+    const { agents } = createSkillsAndAgents(
+      baseConfig({
+        agents: {
+          company: {
+            instructions: customInstructions,
+          },
+        },
+      })
+    );
+
+    const company = agents.find((a) => a.role === 'company');
+    expect(company?.instructions).toBe(customInstructions);
+  });
+
+  it('specialist overrides coexist with company override in the same config', () => {
+    const { agents } = createSkillsAndAgents(
+      baseConfig({
+        agents: {
+          company: {
+            model: 'openai/custom-company-model',
+          },
+          builder: {
+            model: 'anthropic/custom-builder-model',
+            instructions: 'Build fast.',
+          },
+        },
+      })
+    );
+
+    const company = agents.find((a) => a.role === 'company');
+    const builder = agents.find((a) => a.role === 'builder');
+
+    expect(company?.model).toBe('openai/custom-company-model');
+    expect(builder?.model).toBe('anthropic/custom-builder-model');
+    expect(builder?.instructions).toBe('Build fast.');
+  });
+});
