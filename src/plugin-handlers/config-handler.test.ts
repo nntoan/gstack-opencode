@@ -260,4 +260,90 @@ describe('createConfigHandler', () => {
     expect('websearch' in mcp).toBe(false);
     expect('context7' in mcp).toBe(true);
   });
+
+  describe('#company-mode host projection', () => {
+    const specialistAgents: GstackAgent[] = [
+      {
+        role: 'company',
+        name: 'The Company',
+        description: 'Company orchestrator',
+        sprintPhase: 'cross-cutting',
+        skills: [],
+        instructions: 'Company instructions',
+      },
+      {
+        role: 'ceo',
+        name: 'CEO',
+        description: 'CEO agent',
+        sprintPhase: 'think',
+        skills: [],
+        instructions: 'CEO instructions',
+      },
+      {
+        role: 'builder',
+        name: 'Builder',
+        description: 'Builder agent',
+        sprintPhase: 'build',
+        skills: [],
+        instructions: 'Builder instructions',
+      },
+    ];
+
+    it('when agent_surface.mode is company, host-visible config.agent contains only company from built-in registry', async () => {
+      const pluginConfig = makePluginConfig({
+        orchestration_mode: 'multi-agent',
+        agent_surface: { mode: 'company' },
+      });
+      const config: Record<string, unknown> = {};
+      const handler = createConfigHandler({
+        ctx: { directory: '/tmp' },
+        pluginConfig,
+        agents: specialistAgents,
+      });
+      await handler(config);
+
+      const agents = config.agent as Record<string, unknown>;
+      expect(agents).toBeDefined();
+      expect(agents.company).toBeDefined();
+    });
+
+    it('company mode does not publish specialist agents such as ceo or builder from built-in registry', async () => {
+      const pluginConfig = makePluginConfig({
+        orchestration_mode: 'multi-agent',
+        agent_surface: { mode: 'company' },
+      });
+      const config: Record<string, unknown> = {};
+      const handler = createConfigHandler({
+        ctx: { directory: '/tmp' },
+        pluginConfig,
+        agents: specialistAgents,
+      });
+      await handler(config);
+
+      const agents = config.agent as Record<string, unknown>;
+      expect(agents.ceo).toBeUndefined();
+      expect(agents.builder).toBeUndefined();
+    });
+
+    it('host built-ins and non-agent config handling remain consistent with registration-mode rules in company mode', async () => {
+      const pluginConfig = makePluginConfig({
+        orchestration_mode: 'multi-agent',
+        agent_surface: { mode: 'company' },
+        categories: { quick: { model: 'opencode/gpt-5-nano' } },
+        runtime_fallback: { enabled: true },
+      });
+      const config: Record<string, unknown> = {};
+      const handler = createConfigHandler({
+        ctx: { directory: '/tmp' },
+        pluginConfig,
+        agents: specialistAgents,
+      });
+      await handler(config);
+
+      expect((config.categories as Record<string, unknown>)?.quick).toMatchObject({
+        model: 'opencode/gpt-5-nano',
+      });
+      expect(config.runtime_fallback).toMatchObject({ enabled: true });
+    });
+  });
 });
