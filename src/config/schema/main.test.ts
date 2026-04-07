@@ -395,4 +395,60 @@ describe('GstackConfigSchema', () => {
       expect(_).toBeDefined();
     });
   });
+
+  describe('#agent_surface config', () => {
+    it('defaults agent_surface.mode to "company" when agent_surface is absent', () => {
+      const result = GstackConfigSchema.parse({});
+      expect(result.agent_surface?.mode).toBe('company');
+    });
+
+    it('loading config without agent_surface still succeeds (migration-safe)', () => {
+      expect(() => GstackConfigSchema.parse({ orchestration_mode: 'multi-agent' })).not.toThrow();
+    });
+
+    it('accepts agent_surface.mode: "company"', () => {
+      const result = GstackConfigSchema.parse({ agent_surface: { mode: 'company' } });
+      expect(result.agent_surface?.mode).toBe('company');
+    });
+
+    it('accepts agent_surface.mode: "legacy-multi"', () => {
+      const result = GstackConfigSchema.parse({ agent_surface: { mode: 'legacy-multi' } });
+      expect(result.agent_surface?.mode).toBe('legacy-multi');
+    });
+
+    it('rejects invalid agent_surface.mode value', () => {
+      expect(() => GstackConfigSchema.parse({ agent_surface: { mode: 'invalid-mode' } })).toThrow();
+    });
+  });
+
+  describe('#agent_surface reasoning_effort override', () => {
+    it('accepts agents.company.reasoning_effort: "medium"', () => {
+      const result = GstackConfigSchema.parse({
+        agents: {
+          company: { reasoning_effort: 'medium' },
+        },
+      });
+      expect(result.agents?.company?.reasoning_effort).toBe('medium');
+    });
+
+    it('accepts all reasoning_effort values for agents.company', () => {
+      const low = GstackConfigSchema.parse({
+        agents: { company: { reasoning_effort: 'low' } },
+      });
+      expect(low.agents?.company?.reasoning_effort).toBe('low');
+
+      const high = GstackConfigSchema.parse({
+        agents: { company: { reasoning_effort: 'high' } },
+      });
+      expect(high.agents?.company?.reasoning_effort).toBe('high');
+    });
+
+    it('rejects invalid agents.company.reasoning_effort value', () => {
+      expect(() =>
+        GstackConfigSchema.parse({
+          agents: { company: { reasoning_effort: 'ultra-high' } },
+        })
+      ).toThrow();
+    });
+  });
 });

@@ -224,4 +224,23 @@ describe('plugin-config', () => {
       homedirSpy.mockRestore();
     }
   });
+
+  it('backward-compatible: config without agent_surface loads successfully and defaults to company mode', () => {
+    const projectDir = path.join(tempDir, 'project-no-agent-surface');
+    const configPath = path.join(projectDir, '.opencode', 'gstack.jsonc');
+
+    writeConfigFile(
+      configPath,
+      `{
+  "orchestration_mode": "multi-agent",
+  "agents": {
+    "ceo": { "model": "some-model" }
+  }
+}`
+    );
+
+    const config = loadPluginConfig(projectDir, null);
+    expect(config.agent_surface?.mode).toBe('company');
+    expect(config.agents?.ceo?.model).toBe('some-model');
+  });
 });
