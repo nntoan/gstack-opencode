@@ -52,6 +52,7 @@ function applyAgentConfig(params: {
   agents?: GstackAgent[];
 }): void {
   const { config, pluginConfig, agents } = params;
+  const surfaceMode = pluginConfig.agent_surface?.mode ?? 'company';
   const disabledSet = new Set(pluginConfig.disabled_agents ?? []);
   const registrationMode = pluginConfig.agent_registration?.mode ?? 'curated';
   const suppressedHostBuiltins = new Set(
@@ -59,6 +60,26 @@ function applyAgentConfig(params: {
   );
   const agentOverrides = pluginConfig.agents ?? {};
   const builtInAgents = agents ? agentsToOpenCodeAgentConfig(agents) : {};
+
+  if (surfaceMode === 'company') {
+    const companyEntry = builtInAgents['company'];
+    const merged: Record<string, unknown> = companyEntry ? { company: companyEntry } : {};
+
+    if (!disabledSet.has('company')) {
+      const override = agentOverrides['company'];
+      if (override) {
+        merged['company'] = {
+          ...(merged['company'] as Record<string, unknown> | undefined),
+          ...override,
+        };
+      }
+    } else {
+      delete merged['company'];
+    }
+
+    config.agent = merged;
+    return;
+  }
 
   const existingAgents =
     (config.agent as Record<string, unknown>) ?? (config.agents as Record<string, unknown>) ?? {};

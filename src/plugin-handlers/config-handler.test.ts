@@ -6,6 +6,7 @@ import type { GstackAgent } from '../types/agent.ts';
 function makePluginConfig(overrides: Partial<GstackConfig> = {}): GstackConfig {
   return {
     orchestration_mode: 'multi-agent',
+    agent_surface: { mode: 'legacy-multi' },
     disabled_agents: [],
     disabled_categories: [],
     disabled_skills: [],
