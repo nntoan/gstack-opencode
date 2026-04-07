@@ -347,4 +347,125 @@ describe('createConfigHandler', () => {
       expect(config.runtime_fallback).toMatchObject({ enabled: true });
     });
   });
+
+  describe('#legacy-multi compatibility', () => {
+    const allAgents: GstackAgent[] = [
+      {
+        role: 'company',
+        name: 'The Company',
+        description: 'Company orchestrator',
+        sprintPhase: 'cross-cutting',
+        skills: [],
+        instructions: 'Company instructions',
+      },
+      {
+        role: 'ceo',
+        name: 'CEO',
+        description: 'CEO agent',
+        sprintPhase: 'think',
+        skills: [],
+        instructions: 'CEO instructions',
+      },
+      {
+        role: 'builder',
+        name: 'Builder',
+        description: 'Builder agent',
+        sprintPhase: 'build',
+        skills: [],
+        instructions: 'Builder instructions',
+      },
+    ];
+
+    it('when agent_surface.mode is legacy-multi, multi-agent projection remains available', async () => {
+      const pluginConfig = makePluginConfig({
+        orchestration_mode: 'multi-agent',
+        agent_surface: { mode: 'legacy-multi' },
+      });
+      const config: Record<string, unknown> = {};
+      const handler = createConfigHandler({
+        ctx: { directory: '/tmp' },
+        pluginConfig,
+        agents: allAgents,
+      });
+      await handler(config);
+
+      const agents = config.agent as Record<string, unknown>;
+      expect(agents.ceo).toBeDefined();
+      expect(agents.builder).toBeDefined();
+      expect(agents.company).toBeDefined();
+    });
+
+    it('disabled_agents disables by explicit role in legacy-multi but is not the mechanism for hiding specialists in company mode', async () => {
+      const legacyConfig = makePluginConfig({
+        orchestration_mode: 'multi-agent',
+        agent_surface: { mode: 'legacy-multi' },
+        disabled_agents: ['ceo'],
+      });
+      const legacyHandlerConfig: Record<string, unknown> = {};
+      const legacyHandler = createConfigHandler({
+        ctx: { directory: '/tmp' },
+        pluginConfig: legacyConfig,
+        agents: allAgents,
+      });
+      await legacyHandler(legacyHandlerConfig);
+      const legacyAgents = legacyHandlerConfig.agent as Record<string, unknown>;
+      expect(legacyAgents.ceo).toBeUndefined();
+      expect(legacyAgents.builder).toBeDefined();
+
+      const companyConfig = makePluginConfig({
+        orchestration_mode: 'multi-agent',
+        agent_surface: { mode: 'company' },
+      });
+      const companyHandlerConfig: Record<string, unknown> = {};
+      const companyHandler = createConfigHandler({
+        ctx: { directory: '/tmp' },
+        pluginConfig: companyConfig,
+        agents: allAgents,
+      });
+      await companyHandler(companyHandlerConfig);
+      const companyAgents = companyHandlerConfig.agent as Record<string, unknown>;
+      expect(companyAgents.ceo).toBeUndefined();
+      expect(companyAgents.builder).toBeUndefined();
+    });
+
+    it('config.agents.company overrides merge onto the projected company entry in company mode', async () => {
+      const pluginConfig = makePluginConfig({
+        orchestration_mode: 'multi-agent',
+        agent_surface: { mode: 'company' },
+        agents: { company: { model: 'custom-model', instructions: 'Custom instructions' } },
+      });
+      const config: Record<string, unknown> = {};
+      const handler = createConfigHandler({
+        ctx: { directory: '/tmp' },
+        pluginConfig,
+        agents: allAgents,
+      });
+      await handler(config);
+
+      const agents = config.agent as Record<string, unknown>;
+      expect(agents.company).toMatchObject({
+        model: 'custom-model',
+        instructions: 'Custom instructions',
+      });
+    });
+
+    it('absent or undefined agent_surface defaults safely to company mode via schema-backed behavior', async () => {
+      const pluginConfig = makePluginConfig({
+        orchestration_mode: 'multi-agent',
+        agent_surface: undefined,
+      });
+      const config: Record<string, unknown> = {};
+      const handler = createConfigHandler({
+        ctx: { directory: '/tmp' },
+        pluginConfig,
+        agents: allAgents,
+      });
+      await handler(config);
+
+      const agents = config.agent as Record<string, unknown>;
+      expect(agents.company).toBeDefined();
+      expect(agents.ceo).toBeUndefined();
+      expect(agents.builder).toBeUndefined();
+    });
+  });
 });
