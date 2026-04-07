@@ -157,10 +157,11 @@ describe('Agent Registry', () => {
       expect(agents[0].role).toBe('retro-lead');
     });
 
-    it('returns Safety Guard for cross-cutting phase', () => {
+    it('returns Safety Guard and Company for cross-cutting phase', () => {
       const agents = getAgentsByPhase('cross-cutting');
-      expect(agents.length).toBe(1);
-      expect(agents[0].role).toBe('safety-guard');
+      expect(agents.length).toBe(2);
+      const roles = agents.map((a) => a.role).sort();
+      expect(roles).toEqual(['company', 'safety-guard']);
     });
 
     it('returns Upgrader + Session Manager for utility phase', () => {

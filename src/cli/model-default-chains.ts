@@ -115,6 +115,19 @@ const VISUAL_ENGINEERING_CHAIN: FallbackEntry[] = [
   { providers: ['kimi-for-coding'], model: 'k2p5' },
 ];
 
+const COMPANY_CHAIN: FallbackEntry[] = [
+  {
+    providers: ['github-copilot', 'openai', 'opencode'],
+    model: 'gpt-5.4',
+    variant: 'medium',
+  },
+  {
+    providers: ['anthropic', 'opencode'],
+    model: 'claude-opus-4-6',
+    variant: 'medium',
+  },
+];
+
 export const ROLE_FALLBACKS: Record<AgentRole, FallbackEntry[]> = {
   ceo: PROMETHEUS_CHAIN,
   'eng-manager': METIS_CHAIN,
@@ -129,4 +142,5 @@ export const ROLE_FALLBACKS: Record<AgentRole, FallbackEntry[]> = {
   'safety-guard': ORACLE_CHAIN,
   upgrader: HEPHAESTUS_CHAIN,
   'session-manager': EXPLORE_CHAIN,
+  company: COMPANY_CHAIN,
 };

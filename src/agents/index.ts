@@ -13,6 +13,7 @@ import { retroLeadAgent } from './retro-lead.ts';
 import { safetyGuardAgent } from './safety-guard.ts';
 import { upgraderAgent } from './upgrader.ts';
 import { sessionManagerAgent } from './session-manager.ts';
+import { companyAgent } from './company.ts';
 
 export type { GstackAgent, AgentRole, SprintPhase };
 export type { CreateAgentsOptions };
@@ -31,6 +32,7 @@ export {
   safetyGuardAgent,
   upgraderAgent,
   sessionManagerAgent,
+  companyAgent,
 };
 
 const ALL_AGENTS: GstackAgent[] = [
@@ -47,6 +49,7 @@ const ALL_AGENTS: GstackAgent[] = [
   safetyGuardAgent,
   upgraderAgent,
   sessionManagerAgent,
+  companyAgent,
 ];
 
 export function createGstackAgents(options: CreateAgentsOptions = {}): GstackAgent[] {

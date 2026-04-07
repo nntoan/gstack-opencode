@@ -22,7 +22,8 @@ export type AgentRole =
   | 'retro-lead'
   | 'safety-guard'
   | 'upgrader'
-  | 'session-manager';
+  | 'session-manager'
+  | 'company';
 
 export interface GstackAgent {
   role: AgentRole;
