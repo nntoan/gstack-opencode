@@ -2,6 +2,12 @@ export type OrchestrationMode = 'multi-agent' | 'skills-only';
 
 export type PresetMode = 'full' | 'slim';
 
+export type AgentSurfaceMode = 'company' | 'legacy-multi';
+
+export interface AgentSurfaceConfig {
+  mode: AgentSurfaceMode;
+}
+
 export interface TokenBudgetConfig {
   enabled: boolean;
   max_tokens_per_session: number;
@@ -18,6 +24,7 @@ export interface BacklogConfig {
 
 export interface AgentOverrideConfig {
   model?: string;
+  reasoning_effort?: 'low' | 'medium' | 'high';
   instructions?: string;
   enabled?: boolean;
 }
@@ -90,6 +97,7 @@ export interface GstackConfig {
   disabled_hooks: string[];
   install_selection?: InstallSelectionConfig;
   agent_registration?: AgentRegistrationConfig;
+  agent_surface?: AgentSurfaceConfig;
   agents?: Record<string, AgentOverrideConfig>;
   categories?: Record<string, CategoryOverrideConfig>;
   runtime_fallback?: RuntimeFallbackConfig;

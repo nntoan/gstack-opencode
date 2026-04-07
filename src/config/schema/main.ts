@@ -21,6 +21,10 @@ const AgentRegistrationSchema = z.object({
   suppress_host_builtins: z.array(z.string()).default(['build', 'plan']),
 });
 
+const AgentSurfaceSchema = z.object({
+  mode: z.enum(['company', 'legacy-multi']).default('company'),
+});
+
 const CategoryOverrideSchema = z.record(z.string(), z.unknown());
 
 const RuntimeFallbackSchema = z.union([z.boolean(), z.record(z.string(), z.unknown())]);
@@ -45,6 +49,7 @@ export const GstackConfigSchema = z
       mode: 'curated',
       suppress_host_builtins: ['build', 'plan'],
     }),
+    agent_surface: AgentSurfaceSchema.default({ mode: 'company' }),
     agents: AgentOverridesSchema.optional(),
     categories: CategoryOverrideSchema.optional(),
     runtime_fallback: RuntimeFallbackSchema.optional(),

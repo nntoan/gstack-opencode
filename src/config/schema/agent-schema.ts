@@ -2,6 +2,7 @@ import { z } from 'zod';
 
 export const AgentOverrideSchema = z.object({
   model: z.string().optional(),
+  reasoning_effort: z.enum(['low', 'medium', 'high']).optional(),
   instructions: z.string().optional(),
   enabled: z.boolean().optional(),
 });
