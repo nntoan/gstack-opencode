@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import packageJson from '../../package.json' with { type: 'json' };
 import { runInstall } from './install.ts';
 import { runDoctor } from './doctor/index.ts';
+import { runMemoirRefresh } from './memoir.ts';
 
 const packageVersion: string = packageJson.version;
 
@@ -34,6 +35,16 @@ program
   .description('Run environment and config health checks')
   .action(async () => {
     await runDoctor();
+  });
+
+program
+  .command('memoir:refresh')
+  .description('Refresh an ICM memoir for the current project or a target repository')
+  .option('--project <path>', 'Project root to refresh memoir for (defaults to current repository)')
+  .option('--memoir-name <name>', 'Override the memoir name (defaults to project-derived name)')
+  .option('--dry-run', 'Show memoir changes without writing to ICM')
+  .action(async () => {
+    await runMemoirRefresh();
   });
 
 export function runCli(): void {
