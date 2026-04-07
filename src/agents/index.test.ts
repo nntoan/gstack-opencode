@@ -1,16 +1,22 @@
 import { describe, it, expect } from 'vitest';
 import { createGstackAgents, getAgentByRole, getAgentsByPhase } from './index.ts';
+import { companyAgent } from './company.ts';
 
 describe('Agent Registry', () => {
   describe('createGstackAgents()', () => {
-    it('returns all 13 agents in multi-agent mode', () => {
+    it('returns all 14 agents in multi-agent mode', () => {
       const agents = createGstackAgents({});
-      expect(agents.length).toBe(13);
+      expect(agents.length).toBe(14);
     });
 
-    it('returns all 13 agents when no options passed', () => {
+    it('returns all 14 agents when no options passed', () => {
       const agents = createGstackAgents();
-      expect(agents.length).toBe(13);
+      expect(agents.length).toBe(14);
+    });
+
+    it('includes company agent', () => {
+      const agents = createGstackAgents({});
+      expect(agents.find((a) => a.role === 'company')).toBeDefined();
     });
 
     it('returns empty array in skills-only mode', () => {
@@ -20,7 +26,7 @@ describe('Agent Registry', () => {
 
     it('filters out a single disabled agent', () => {
       const agents = createGstackAgents({ disabledAgents: new Set(['ceo']) });
-      expect(agents.length).toBe(12);
+      expect(agents.length).toBe(13);
       expect(agents.find((a) => a.role === 'ceo')).toBeUndefined();
     });
 
@@ -28,7 +34,7 @@ describe('Agent Registry', () => {
       const agents = createGstackAgents({
         disabledAgents: new Set(['ceo', 'designer', 'debugger']),
       });
-      expect(agents.length).toBe(10);
+      expect(agents.length).toBe(11);
     });
 
     it('disabledAgents in skills-only mode still returns empty', () => {
@@ -51,7 +57,7 @@ describe('Agent Registry', () => {
       }
     });
 
-    it('all 13 roles are present', () => {
+    it('all 14 roles are present', () => {
       const agents = createGstackAgents({});
       const roles = new Set(agents.map((a) => a.role));
       expect(roles.has('ceo')).toBe(true);
@@ -67,6 +73,7 @@ describe('Agent Registry', () => {
       expect(roles.has('safety-guard')).toBe(true);
       expect(roles.has('upgrader')).toBe(true);
       expect(roles.has('session-manager')).toBe(true);
+      expect(roles.has('company')).toBe(true);
     });
   });
 
@@ -88,6 +95,13 @@ describe('Agent Registry', () => {
       const agent = getAgentByRole('safety-guard');
       expect(agent).toBeDefined();
       expect(agent?.sprintPhase).toBe('cross-cutting');
+    });
+
+    it('returns The Company agent by role', () => {
+      const agent = getAgentByRole('company');
+      expect(agent).toBeDefined();
+      expect(agent?.name).toBe('The Company');
+      expect(agent?.role).toBe('company');
     });
 
     it('returns undefined for unknown role', () => {
@@ -159,6 +173,14 @@ describe('Agent Registry', () => {
     it('returns empty array for phase with no agents', () => {
       const agents = getAgentsByPhase('test');
       expect(Array.isArray(agents)).toBe(true);
+    });
+  });
+
+  describe('companyAgent export', () => {
+    it('companyAgent is exported from index', () => {
+      expect(companyAgent).toBeDefined();
+      expect(companyAgent.role).toBe('company');
+      expect(companyAgent.name).toBe('The Company');
     });
   });
 });
