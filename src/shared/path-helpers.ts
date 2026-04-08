@@ -12,6 +12,10 @@ export function getOrchestratorDir(projectDir: string): string {
   return `${projectDir}/.gstack/orchestrator`;
 }
 
+export function getOrchestratorCheckpointsDir(projectDir: string): string {
+  return `${projectDir}/.gstack/orchestrator/checkpoints`;
+}
+
 export function getPlansDir(projectDir: string): string {
   return `${projectDir}/.gstack/plans`;
 }
