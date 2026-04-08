@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createWorkspaceState } from '../workspace-state/index.ts';
 import { createAnalytics } from '../analytics/index.ts';
-import { getAnalyticsDir, getPlansDir } from '../../shared/path-helpers.ts';
+import { getAnalyticsDir, getPlansDir, getStatePath } from '../../shared/path-helpers.ts';
 import type { Managers } from '../../create-managers.ts';
 import {
   createSavePlanTool,
@@ -445,6 +445,146 @@ describe('sprint-tools', () => {
       const result = await shipReadiness.execute({}, makeContext(directory));
 
       expect(result).toContain('Ready to ship');
+    });
+  });
+
+  // ── save-plan: canonical company state init ────────────────────────────────
+
+  describe('save-plan: canonical company state (state.json)', () => {
+    it('initializes canonical company state on first plan save', async () => {
+      const directory = createTempDir();
+      tempDirs.push(directory);
+
+      const managers = makeManagers(directory) as Managers;
+      const savePlan = createSavePlanTool(directory, managers);
+      await savePlan.execute(
+        { name: 'first-plan', content: '# First Plan' },
+        makeContext(directory)
+      );
+
+      const company = managers.workspaceState.company.read();
+      expect(company).not.toBeNull();
+      expect(company?.source).toBe('canonical');
+      expect(company?.visible_agent).toBe('company');
+      expect(company?.plan_name).toBe('first-plan');
+      expect(company?.version).toBe(1);
+    });
+
+    it('canonical company state is written to state.json on disk', async () => {
+      const directory = createTempDir();
+      tempDirs.push(directory);
+
+      const managers = makeManagers(directory) as Managers;
+      const savePlan = createSavePlanTool(directory, managers);
+      await savePlan.execute({ name: 'disk-plan', content: '# Disk Plan' }, makeContext(directory));
+
+      const statePath = getStatePath(directory);
+      const raw = readFileSync(statePath, 'utf-8');
+      const parsed = JSON.parse(raw) as { source: string; plan_name: string };
+      expect(parsed.source).toBe('canonical');
+      expect(parsed.plan_name).toBe('disk-plan');
+    });
+
+    it('does not overwrite existing canonical company state when a second plan is saved', async () => {
+      const directory = createTempDir();
+      tempDirs.push(directory);
+
+      const managers = makeManagers(directory) as Managers;
+      const now = new Date().toISOString();
+      managers.workspaceState.company.write({
+        version: 1,
+        visible_agent: 'company',
+        source: 'canonical',
+        started_at: now,
+        updated_at: now,
+        session_ids: ['original-session'],
+        plan_name: 'original-plan',
+        active_plan: '/some/path/original-plan.md',
+        ownership: {
+          snapshot: 'state.json',
+          log: 'sprint-log.jsonl',
+          checkpoints: 'checkpoints/',
+        },
+      });
+
+      const savePlan = createSavePlanTool(directory, managers);
+      await savePlan.execute(
+        { name: 'second-plan', content: '# Second Plan' },
+        makeContext(directory)
+      );
+
+      const company = managers.workspaceState.company.read();
+      expect(company?.plan_name).toBe('original-plan');
+      expect(company?.session_ids).toEqual(['original-session']);
+    });
+  });
+
+  // ── sprint-status: canonical-first reporting ───────────────────────────────
+
+  describe('sprint-status: canonical company state reporting', () => {
+    it('shows canonical company state when present, not legacy boulder', async () => {
+      const directory = createTempDir();
+      tempDirs.push(directory);
+
+      const managers = makeManagers(directory) as Managers;
+      const now = new Date().toISOString();
+
+      managers.workspaceState.company.write({
+        version: 1,
+        visible_agent: 'company',
+        source: 'canonical',
+        started_at: now,
+        updated_at: now,
+        session_ids: ['s1', 's2'],
+        plan_name: 'canonical-plan',
+        current_phase: 'build',
+        active_specialist: 'builder',
+        ownership: {
+          snapshot: 'state.json',
+          log: 'sprint-log.jsonl',
+          checkpoints: 'checkpoints/',
+        },
+      });
+
+      managers.workspaceState.boulder.write({
+        active_plan: '/some/boulder.md',
+        started_at: '2020-01-01T00:00:00.000Z',
+        session_ids: ['old-session'],
+        plan_name: 'boulder-plan',
+        current_phase: 'design',
+        agent: 'designer',
+      });
+
+      const statusTool = createSprintStatusTool(managers);
+      const result = await statusTool.execute({}, makeContext(directory));
+
+      expect(result).toContain('canonical-plan');
+      expect(result).not.toContain('boulder-plan');
+      expect(result).toContain('builder');
+    });
+
+    it('falls back to legacy boulder state when no canonical company state exists', async () => {
+      const directory = createTempDir();
+      tempDirs.push(directory);
+
+      const managers = makeManagers(directory) as Managers;
+      const plansDir = getPlansDir(directory);
+      mkdirSync(plansDir, { recursive: true });
+      writeFileSync(join(plansDir, 'legacy.md'), '# Legacy\n', 'utf-8');
+      managers.workspaceState.boulder.write({
+        active_plan: join(plansDir, 'legacy.md'),
+        started_at: '2026-01-01T00:00:00.000Z',
+        session_ids: ['s1'],
+        plan_name: 'legacy',
+        current_phase: 'build',
+        agent: 'builder',
+      });
+
+      const statusTool = createSprintStatusTool(managers);
+      const result = await statusTool.execute({}, makeContext(directory));
+
+      expect(result).toContain('legacy');
+      expect(result).toContain('build');
     });
   });
 });
