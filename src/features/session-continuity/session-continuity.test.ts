@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createBoulderHook } from './boulder-hook.ts';
 import { createProgressHook } from './progress-hook.ts';
 import { createRecoveryHook } from './recovery-hook.ts';
+import { createDelegationContextHook } from '../quality-scorecard/delegation-context-hook.ts';
 import type {
   BoulderState,
   PlanProgress,
@@ -11,6 +12,8 @@ import type {
 import type { ShipReadiness } from '../workspace-state/review-dashboard.ts';
 import type { DelegationResult } from '../orchestrator/index.ts';
 import type { GstackAgent } from '../../types/agent.ts';
+import type { CompanyState } from '../company/types.ts';
+import { COMPANY_ARTIFACT_OWNERSHIP } from '../company/types.ts';
 
 // --- Fakes ---
 
@@ -36,15 +39,38 @@ function makeDelegation(phase: string = 'build', role: string = 'builder'): Dele
 
 interface FakeWorkspaceStateOpts {
   boulderState?: BoulderState | null;
+  companyState?: CompanyState | null;
   progress?: PlanProgress;
   writtenStates?: BoulderState[];
   appendedIds?: string[];
+  companyWrittenStates?: CompanyState[];
+  companyLogEntries?: Array<{ ts: string; event: string; data?: Record<string, unknown> }>;
+}
+
+function makeCanonicalCompanyState(overrides: Partial<CompanyState> = {}): CompanyState {
+  return {
+    version: 1,
+    visible_agent: 'company',
+    source: 'canonical',
+    started_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:01:00.000Z',
+    session_ids: ['sess-canonical'],
+    active_plan: '/path/canonical-plan.md',
+    plan_name: 'Canonical Plan',
+    current_phase: 'build',
+    active_specialist: 'builder',
+    ownership: COMPANY_ARTIFACT_OWNERSHIP,
+    ...overrides,
+  };
 }
 
 function makeFakeWorkspaceState(opts: FakeWorkspaceStateOpts = {}) {
   let currentBoulder = opts.boulderState ?? null;
+  let currentCompany = opts.companyState ?? null;
   const writtenStates = opts.writtenStates ?? [];
   const appendedIds = opts.appendedIds ?? [];
+  const companyWrittenStates = opts.companyWrittenStates ?? [];
+  const companyLogEntries = opts.companyLogEntries ?? [];
   const progress: PlanProgress = opts.progress ?? { total: 5, completed: 2, isComplete: false };
 
   const fakeRecord: SessionRecord = {
@@ -93,16 +119,42 @@ function makeFakeWorkspaceState(opts: FakeWorkspaceStateOpts = {}) {
     }),
     ensureDir: () => {},
     company: {
-      read: () => null,
-      readResolved: () => null,
-      write: () => true,
-      appendLog: () => {},
-      readLog: () => [],
+      read: () => currentCompany,
+      readResolved: () => {
+        if (currentCompany !== null) return currentCompany;
+        if (currentBoulder !== null) {
+          return {
+            version: 1 as const,
+            visible_agent: 'company' as const,
+            source: 'legacy-boulder' as const,
+            started_at: currentBoulder.started_at,
+            updated_at: new Date().toISOString(),
+            session_ids: [...currentBoulder.session_ids],
+            active_plan: currentBoulder.active_plan,
+            plan_name: currentBoulder.plan_name,
+            current_phase: currentBoulder.current_phase,
+            active_specialist: currentBoulder.agent,
+            ownership: COMPANY_ARTIFACT_OWNERSHIP,
+          };
+        }
+        return null;
+      },
+      write: (state: CompanyState) => {
+        currentCompany = state;
+        companyWrittenStates.push(state);
+        return true;
+      },
+      appendLog: (entry: { ts: string; event: string; data?: Record<string, unknown> }) => {
+        companyLogEntries.push(entry);
+      },
+      readLog: () => companyLogEntries,
       writeCheckpoint: () => true,
       readCheckpoint: () => null,
     },
     writtenStates,
     appendedIds,
+    companyWrittenStates,
+    companyLogEntries,
   };
 }
 
@@ -549,5 +601,255 @@ describe('createRecoveryHook', () => {
     await hook.handler({ sessionID: 'new-sess' }, output);
     expect(output.system[0]).toContain('1/4');
     expect(output.system[0]).toContain('25%');
+  });
+
+  it('uses canonical Company state when available for recovery context', async () => {
+    const ws = makeFakeWorkspaceState({
+      companyState: makeCanonicalCompanyState({
+        active_plan: '/path/canonical.md',
+        plan_name: 'Canonical Sprint',
+        current_phase: 'ship',
+        active_specialist: 'release-engineer',
+      }),
+      boulderState: null,
+      progress: { total: 3, completed: 1, isComplete: false },
+    });
+    const hook = createRecoveryHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({ sessionID: 'new-sess' }, output);
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('Canonical Sprint');
+    expect(output.system[0]).toContain('ship');
+    expect(output.system[0]).toContain('release-engineer');
+  });
+
+  it('falls back to legacy Boulder when canonical state is absent', async () => {
+    const ws = makeFakeWorkspaceState({
+      companyState: null,
+      boulderState: {
+        active_plan: '/path/boulder.md',
+        started_at: new Date().toISOString(),
+        session_ids: ['old-sess'],
+        plan_name: 'Boulder Plan',
+        current_phase: 'review',
+        agent: 'reviewer',
+      },
+      progress: { total: 4, completed: 2, isComplete: false },
+    });
+    const hook = createRecoveryHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({ sessionID: 'new-sess' }, output);
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('Boulder Plan');
+  });
+});
+
+describe('createProgressHook — canonical state', () => {
+  it('uses canonical Company state when available for progress context', async () => {
+    const ws = makeFakeWorkspaceState({
+      companyState: makeCanonicalCompanyState({
+        active_plan: '/path/canonical.md',
+        plan_name: 'Canonical Progress Plan',
+        current_phase: 'build',
+        active_specialist: 'builder',
+      }),
+      boulderState: null,
+      progress: { total: 6, completed: 3, isComplete: false },
+    });
+    const hook = createProgressHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({}, output);
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('Canonical Progress Plan');
+    expect(output.system[0]).toContain('3/6');
+    expect(output.system[0]).toContain('50%');
+    expect(output.system[0]).toContain('build');
+    expect(output.system[0]).toContain('builder');
+  });
+
+  it('falls back to legacy Boulder when canonical state is absent for progress', async () => {
+    const ws = makeFakeWorkspaceState({
+      companyState: null,
+      boulderState: {
+        active_plan: '/path/boulder.md',
+        started_at: new Date().toISOString(),
+        session_ids: [],
+        plan_name: 'Boulder Progress Plan',
+        current_phase: 'plan',
+        agent: 'eng-manager',
+      },
+      progress: { total: 5, completed: 1, isComplete: false },
+    });
+    const hook = createProgressHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({}, output);
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('Boulder Progress Plan');
+    expect(output.system[0]).toContain('1/5');
+  });
+});
+
+describe('createBoulderHook — canonical Company state tracker', () => {
+  it('writes canonical Company state when phase changes', async () => {
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('review', 'reviewer'));
+    const ws = makeFakeWorkspaceState({
+      boulderState: {
+        active_plan: '/path/plan.md',
+        started_at: new Date().toISOString(),
+        session_ids: [],
+        plan_name: 'tracked-plan',
+        current_phase: 'build',
+        agent: 'builder',
+      },
+      companyState: makeCanonicalCompanyState({
+        current_phase: 'build',
+        active_specialist: 'builder',
+      }),
+    });
+    const hook = createBoulderHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState({
+        delegations,
+      }) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-1' }, {});
+    expect(ws.companyWrittenStates).toHaveLength(1);
+    expect(ws.companyWrittenStates[0].current_phase).toBe('review');
+    expect(ws.companyWrittenStates[0].active_specialist).toBe('reviewer');
+  });
+
+  it('appends a log entry when phase or specialist transitions', async () => {
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-2', makeDelegation('ship', 'release-engineer'));
+    const ws = makeFakeWorkspaceState({
+      boulderState: {
+        active_plan: '/path/plan.md',
+        started_at: new Date().toISOString(),
+        session_ids: [],
+        plan_name: 'log-plan',
+        current_phase: 'build',
+      },
+      companyState: makeCanonicalCompanyState({
+        current_phase: 'build',
+        active_specialist: 'builder',
+      }),
+    });
+    const hook = createBoulderHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState({
+        delegations,
+      }) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-2' }, {});
+    expect(ws.companyLogEntries.length).toBeGreaterThanOrEqual(1);
+    expect(ws.companyLogEntries[0].event).toBe('phase_transition');
+  });
+
+  it('does not create canonical Company state when none exists (legacy-only workspace)', async () => {
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-3', makeDelegation('build', 'builder'));
+    const ws = makeFakeWorkspaceState({
+      boulderState: {
+        active_plan: '/path/plan.md',
+        started_at: new Date().toISOString(),
+        session_ids: [],
+        plan_name: 'legacy-plan',
+        current_phase: 'plan',
+        agent: 'eng-manager',
+      },
+      companyState: null,
+    });
+    const hook = createBoulderHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState({
+        delegations,
+      }) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    await hook.handler({ sessionID: 'sess-3' }, {});
+    expect(ws.companyWrittenStates).toHaveLength(0);
+  });
+});
+
+describe('createDelegationContextHook — canonical state', () => {
+  it('uses canonical Company state plan metadata when available', async () => {
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('build'));
+    const ws = makeFakeWorkspaceState({
+      companyState: makeCanonicalCompanyState({
+        active_plan: '/path/canonical.md',
+        plan_name: 'Canonical Context Plan',
+        current_phase: 'build',
+        active_specialist: 'builder',
+      }),
+      boulderState: null,
+      progress: { total: 5, completed: 2, isComplete: false },
+    });
+    const hook = createDelegationContextHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState({
+        delegations,
+      }) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({ sessionID: 'sess-1' }, output);
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('Canonical Context Plan');
+  });
+
+  it('falls back to legacy Boulder for delegation context when canonical state absent', async () => {
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('build'));
+    const ws = makeFakeWorkspaceState({
+      companyState: null,
+      boulderState: {
+        active_plan: '/path/boulder.md',
+        started_at: new Date().toISOString(),
+        session_ids: [],
+        plan_name: 'Boulder Context Plan',
+        current_phase: 'build',
+      },
+      progress: { total: 5, completed: 2, isComplete: false },
+    });
+    const hook = createDelegationContextHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState({
+        delegations,
+      }) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({ sessionID: 'sess-1' }, output);
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('Boulder Context Plan');
   });
 });
