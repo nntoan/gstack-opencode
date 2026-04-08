@@ -3,6 +3,7 @@ import {
   getGstackDir,
   getBrowserDir,
   getOrchestratorDir,
+  getOrchestratorCheckpointsDir,
   getPlansDir,
   getNotepadsDir,
   getEvidenceDir,
@@ -99,5 +100,10 @@ describe('path-helpers', () => {
   it('getBacklogDir returns correct path outside gstack', () => {
     const result = getBacklogDir(projectDir);
     expect(result).toBe('/test/project/.backlog');
+  });
+
+  it('getOrchestratorCheckpointsDir returns correct path', () => {
+    const result = getOrchestratorCheckpointsDir(projectDir);
+    expect(result).toBe('/test/project/.gstack/orchestrator/checkpoints');
   });
 });
