@@ -14,3 +14,4 @@ export {
   writeCompanyCheckpoint,
   writeCompanyState,
 } from './storage.ts';
+export { createCompanyMigrationLogEntry, migrateBoulderStateToCompanyState } from './migration.ts';
