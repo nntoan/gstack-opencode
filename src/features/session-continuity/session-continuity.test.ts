@@ -92,6 +92,15 @@ function makeFakeWorkspaceState(opts: FakeWorkspaceStateOpts = {}) {
       list: async () => [] as string[],
     }),
     ensureDir: () => {},
+    company: {
+      read: () => null,
+      readResolved: () => null,
+      write: () => true,
+      appendLog: () => {},
+      readLog: () => [],
+      writeCheckpoint: () => true,
+      readCheckpoint: () => null,
+    },
     writtenStates,
     appendedIds,
   };

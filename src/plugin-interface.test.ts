@@ -41,6 +41,15 @@ describe('createPluginInterface', () => {
       reviews: {} as unknown as Managers['workspaceState']['reviews'],
       notepads: () => ({}) as unknown as ReturnType<Managers['workspaceState']['notepads']>,
       ensureDir: () => {},
+      company: {
+        read: () => null,
+        readResolved: () => null,
+        write: () => true,
+        appendLog: () => {},
+        readLog: () => [],
+        writeCheckpoint: () => true,
+        readCheckpoint: () => null,
+      },
     },
     analytics: {} as unknown as Managers['analytics'],
   };

@@ -10,6 +10,16 @@ import { findPlans, getPlanName, getPlanProgress } from './plan-progress.ts';
 import { createNotepadManager } from './notepad-manager.ts';
 import { createReviewDashboard } from './review-dashboard.ts';
 import { createSessionTracker } from './session-tracker.ts';
+import {
+  appendCompanyLogEntry,
+  migrateBoulderStateToCompanyState,
+  readCompanyCheckpoint,
+  readCompanyLogEntries,
+  readCompanyState,
+  writeCompanyCheckpoint,
+  writeCompanyState,
+} from '../company/index.ts';
+import type { CompanyCheckpoint, CompanyLogEntry, CompanyState } from '../company/index.ts';
 
 export type {
   BoulderState,
@@ -36,6 +46,27 @@ export function createWorkspaceState(directory: string) {
       clear: () => clearBoulderState(directory),
       upsert: (input: Parameters<typeof upsertTaskSessionState>[1]) =>
         upsertTaskSessionState(directory, input),
+    },
+    company: {
+      read: (): CompanyState | null => readCompanyState(directory),
+      readResolved: (): CompanyState | null => {
+        const canonical = readCompanyState(directory);
+        if (canonical !== null) {
+          return canonical;
+        }
+        const boulder = readBoulderState(directory);
+        if (boulder !== null) {
+          return migrateBoulderStateToCompanyState(boulder, new Date().toISOString());
+        }
+        return null;
+      },
+      write: (state: CompanyState): boolean => writeCompanyState(directory, state),
+      appendLog: (entry: CompanyLogEntry): void => appendCompanyLogEntry(directory, entry),
+      readLog: (): CompanyLogEntry[] => readCompanyLogEntries(directory),
+      writeCheckpoint: (checkpoint: CompanyCheckpoint): boolean =>
+        writeCompanyCheckpoint(directory, checkpoint),
+      readCheckpoint: (checkpointId: string): CompanyCheckpoint | null =>
+        readCompanyCheckpoint(directory, checkpointId),
     },
     plans: {
       getProgress: (planPath: string) => getPlanProgress(planPath),
