@@ -7,6 +7,7 @@ import { getPlansDir } from '../../shared/path-helpers.ts';
 import { log } from '../../shared/index.ts';
 import type { Managers } from '../../create-managers.ts';
 import { createBoulderState } from '../workspace-state/index.ts';
+import { COMPANY_ARTIFACT_OWNERSHIP } from '../company/types.ts';
 
 /**
  * Validates that a filename does not escape the expected directory.
@@ -45,6 +46,24 @@ export function createSavePlanTool(directory: string, managers: Managers): ToolD
           const boulderState = createBoulderState(filePath, sessionId);
           managers.workspaceState.boulder.write(boulderState);
           log('[save-plan] initialized boulder state for plan', { name: args.name });
+        }
+
+        const existingCompany = managers.workspaceState.company.read();
+        if (!existingCompany) {
+          const sessionId = context.sessionID ?? 'unknown';
+          const nowIso = new Date().toISOString();
+          managers.workspaceState.company.write({
+            version: 1,
+            visible_agent: 'company',
+            source: 'canonical',
+            active_plan: filePath,
+            plan_name: args.name,
+            started_at: nowIso,
+            updated_at: nowIso,
+            session_ids: [sessionId],
+            ownership: COMPANY_ARTIFACT_OWNERSHIP,
+          });
+          log('[save-plan] initialized canonical company state for plan', { name: args.name });
         }
 
         return `Plan saved: .gstack/plans/${args.name}.md`;
@@ -216,19 +235,13 @@ export function createSprintStatusTool(managers: Managers): ToolDefinition {
     async execute() {
       const lines: string[] = ['## Sprint Status'];
 
-      // Boulder state
-      const boulder = managers.workspaceState.boulder.read();
-      if (boulder) {
-        lines.push(`\n**Active Plan:** ${boulder.plan_name}`);
-        lines.push(`**Phase:** ${boulder.current_phase ?? 'unknown'}`);
-        lines.push(`**Agent:** ${boulder.agent ?? 'none'}`);
-        lines.push(`**Started:** ${boulder.started_at}`);
-        lines.push(`**Sessions:** ${boulder.session_ids.length}`);
-
-        const taskCount = Object.keys(boulder.task_sessions ?? {}).length;
-        if (taskCount > 0) {
-          lines.push(`**Task Sessions:** ${taskCount}`);
-        }
+      const company = managers.workspaceState.company.readResolved();
+      if (company) {
+        lines.push(`\n**Active Plan:** ${company.plan_name ?? 'unknown'}`);
+        lines.push(`**Phase:** ${company.current_phase ?? 'unknown'}`);
+        lines.push(`**Agent:** ${company.active_specialist ?? 'none'}`);
+        lines.push(`**Started:** ${company.started_at}`);
+        lines.push(`**Sessions:** ${company.session_ids.length}`);
       } else {
         lines.push('\n**No active sprint.** No boulder state found.');
       }

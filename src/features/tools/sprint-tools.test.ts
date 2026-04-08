@@ -551,7 +551,7 @@ describe('sprint-tools', () => {
         started_at: '2020-01-01T00:00:00.000Z',
         session_ids: ['old-session'],
         plan_name: 'boulder-plan',
-        current_phase: 'design',
+        current_phase: 'plan',
         agent: 'designer',
       });
 
