@@ -15,16 +15,16 @@ export function createProgressHook(params: {
       if (!safeOutput?.system || !Array.isArray(safeOutput.system)) return;
 
       try {
-        const boulder = workspaceState.boulder.read();
-        if (!boulder?.active_plan) return;
+        const company = workspaceState.company.readResolved();
+        if (!company?.active_plan) return;
 
-        const progress = workspaceState.plans.getProgress(boulder.active_plan);
+        const progress = workspaceState.plans.getProgress(company.active_plan);
         if (progress.total === 0) return;
 
         const pct = Math.round((progress.completed / progress.total) * 100);
         const progressLine = progress.isComplete
-          ? `## Sprint Progress\n**Plan:** ${boulder.plan_name}\n**Status:** COMPLETE (${progress.completed}/${progress.total} tasks)`
-          : `## Sprint Progress\n**Plan:** ${boulder.plan_name}\n**Progress:** ${progress.completed}/${progress.total} tasks (${pct}%)\n**Phase:** ${boulder.current_phase ?? 'unknown'}\n**Agent:** ${boulder.agent ?? 'unknown'}`;
+          ? `## Sprint Progress\n**Plan:** ${company.plan_name}\n**Status:** COMPLETE (${progress.completed}/${progress.total} tasks)`
+          : `## Sprint Progress\n**Plan:** ${company.plan_name}\n**Progress:** ${progress.completed}/${progress.total} tasks (${pct}%)\n**Phase:** ${company.current_phase ?? 'unknown'}\n**Agent:** ${company.active_specialist ?? 'unknown'}`;
 
         safeOutput.system.push(progressLine);
       } catch (err: unknown) {

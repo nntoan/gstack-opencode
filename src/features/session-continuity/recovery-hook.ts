@@ -20,25 +20,24 @@ export function createRecoveryHook(params: {
       const sessionId = typedInput.sessionID;
       if (!sessionId) return;
 
-      // Only inject recovery context if no active delegation
       const delegation = delegationState.getDelegation(sessionId);
       if (delegation) return;
 
       try {
-        const boulder = workspaceState.boulder.read();
-        if (!boulder?.active_plan) return;
+        const company = workspaceState.company.readResolved();
+        if (!company?.active_plan) return;
 
-        const progress = workspaceState.plans.getProgress(boulder.active_plan);
+        const progress = workspaceState.plans.getProgress(company.active_plan);
         const pct =
           progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
 
         const recoveryContext = [
           '## Session Recovery',
           '',
-          `A previous session was working on plan: **${boulder.plan_name}**`,
+          `A previous session was working on plan: **${company.plan_name}**`,
           `Progress: ${progress.completed}/${progress.total} tasks (${pct}%)`,
-          boulder.current_phase ? `Last phase: ${boulder.current_phase}` : '',
-          boulder.agent ? `Last agent: ${boulder.agent}` : '',
+          company.current_phase ? `Last phase: ${company.current_phase}` : '',
+          company.active_specialist ? `Last agent: ${company.active_specialist}` : '',
           '',
           'Use the sprint-status tool to see full state, or continue where the previous session left off.',
         ]

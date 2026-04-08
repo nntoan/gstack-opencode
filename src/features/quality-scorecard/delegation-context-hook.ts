@@ -26,7 +26,6 @@ export function createDelegationContextHook(params: {
       try {
         const hints: string[] = [];
 
-        // If we're in build phase and reviews have passed, suggest shipping
         if (delegation.phase === 'build') {
           const readiness = await workspaceState.reviews.isShipReady();
           if (readiness.ready) {
@@ -36,7 +35,6 @@ export function createDelegationContextHook(params: {
           }
         }
 
-        // If we're in ship phase but reviews haven't passed, block
         if (delegation.phase === 'ship') {
           const readiness = await workspaceState.reviews.isShipReady();
           if (!readiness.ready) {
@@ -47,13 +45,12 @@ export function createDelegationContextHook(params: {
           }
         }
 
-        // If there's a boulder with an active plan, remind about it
-        const boulder = workspaceState.boulder.read();
-        if (boulder?.active_plan) {
-          const progress = workspaceState.plans.getProgress(boulder.active_plan);
+        const company = workspaceState.company.readResolved();
+        if (company?.active_plan) {
+          const progress = workspaceState.plans.getProgress(company.active_plan);
           if (!progress.isComplete && progress.total > 0) {
             hints.push(
-              `Active plan "${boulder.plan_name}" has ${progress.completed}/${progress.total} tasks complete. ` +
+              `Active plan "${company.plan_name}" has ${progress.completed}/${progress.total} tasks complete. ` +
                 'Focus on completing plan tasks before starting new work.'
             );
           }

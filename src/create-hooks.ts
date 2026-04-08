@@ -66,6 +66,14 @@ export function createHooks(params: {
       gateEngine,
       getCurrentPhase,
       getSessionMetadata: (_sessionId: string) => {
+        const company = workspaceState.company.readResolved();
+        if (company) {
+          return {
+            activePlan: company.active_plan,
+            planName: company.plan_name,
+            currentPhase: company.current_phase,
+          };
+        }
         const boulder = workspaceState.boulder.read();
         if (!boulder) return {};
         return {

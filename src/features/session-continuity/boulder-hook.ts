@@ -21,20 +21,60 @@ export function createBoulderHook(params: {
       if (!delegation) return;
 
       try {
+        const nowIso = new Date().toISOString();
+        const newPhase = delegation.phase;
+        const newSpecialist = delegation.agent.role;
+
+        const canonical = workspaceState.company.read();
+        if (canonical !== null) {
+          const phaseChanged = canonical.current_phase !== newPhase;
+          const specialistChanged = canonical.active_specialist !== newSpecialist;
+
+          if (phaseChanged || specialistChanged) {
+            const updatedIds = canonical.session_ids.includes(sessionId)
+              ? canonical.session_ids
+              : [...canonical.session_ids, sessionId];
+
+            workspaceState.company.write({
+              ...canonical,
+              current_phase: newPhase,
+              active_specialist: newSpecialist,
+              updated_at: nowIso,
+              session_ids: updatedIds,
+            });
+
+            workspaceState.company.appendLog({
+              ts: nowIso,
+              event: 'phase_transition',
+              data: {
+                session_id: sessionId,
+                from_phase: canonical.current_phase,
+                to_phase: newPhase,
+                from_specialist: canonical.active_specialist,
+                to_specialist: newSpecialist,
+              },
+            });
+          } else if (!canonical.session_ids.includes(sessionId)) {
+            workspaceState.company.write({
+              ...canonical,
+              updated_at: nowIso,
+              session_ids: [...canonical.session_ids, sessionId],
+            });
+          }
+        }
+
         const existing = workspaceState.boulder.read();
         if (!existing) return;
 
-        // Update if phase or agent changed
-        const phaseChanged = existing.current_phase !== delegation.phase;
-        const agentChanged = existing.agent !== delegation.agent.role;
+        const phaseChanged = existing.current_phase !== newPhase;
+        const agentChanged = existing.agent !== newSpecialist;
         if (phaseChanged || agentChanged) {
           workspaceState.boulder.write({
             ...existing,
-            current_phase: delegation.phase,
-            agent: delegation.agent.role,
+            current_phase: newPhase,
+            agent: newSpecialist,
           });
         }
-        // Append session if new
         workspaceState.boulder.append(sessionId);
       } catch (err: unknown) {
         log('[ERROR] boulder-hook failed', {

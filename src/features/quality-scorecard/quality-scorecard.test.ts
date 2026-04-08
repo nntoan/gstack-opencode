@@ -15,6 +15,7 @@ import type { DelegationResult } from '../orchestrator/index.ts';
 import type { GstackAgent, SprintPhase } from '../../types/agent.ts';
 import type { SkillUsageEvent, SprintLogEvent } from '../analytics/index.ts';
 import type { BuiltinSkill } from '../../types/skill.ts';
+import { COMPANY_ARTIFACT_OWNERSHIP } from '../company/types.ts';
 
 // --- Fakes ---
 
@@ -150,7 +151,24 @@ function makeFakeWorkspaceState(opts: FakeWorkspaceStateOpts = {}) {
     ensureDir: () => {},
     company: {
       read: () => null,
-      readResolved: () => null,
+      readResolved: () => {
+        if (boulderState !== null) {
+          return {
+            version: 1 as const,
+            visible_agent: 'company' as const,
+            source: 'legacy-boulder' as const,
+            started_at: boulderState.started_at,
+            updated_at: new Date().toISOString(),
+            session_ids: [...boulderState.session_ids],
+            active_plan: boulderState.active_plan,
+            plan_name: boulderState.plan_name,
+            current_phase: boulderState.current_phase,
+            active_specialist: boulderState.agent,
+            ownership: COMPANY_ARTIFACT_OWNERSHIP,
+          };
+        }
+        return null;
+      },
       write: () => true,
       appendLog: () => {},
       readLog: () => [],
