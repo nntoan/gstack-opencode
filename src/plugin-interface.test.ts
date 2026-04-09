@@ -1,4 +1,7 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createPluginInterface } from './plugin-interface.ts';
 import { DeferredMcpInvoker } from './create-managers.ts';
 import type { GstackConfig } from './types/config.ts';
@@ -11,6 +14,8 @@ import type { BuiltinSkill } from './types/skill.ts';
 import type { HookRegistry } from './types/hooks.ts';
 import { COMPANY_ARTIFACT_OWNERSHIP } from './features/company/index.ts';
 import type { CompanyCheckpoint, CompanyState } from './features/company/index.ts';
+import { writeCompanyState, registerDecisionAnswerInState } from './features/company/storage.ts';
+import { createDecisionWait } from './features/company/company-decision-wait.ts';
 
 describe('createPluginInterface', () => {
   const defaultConfig = GstackConfigSchema.parse({}) as GstackConfig;
@@ -689,5 +694,475 @@ describe('createPluginInterface', () => {
     await handler({ type: 'session.deleted', properties: { info: { id: 'ses_del' } } });
 
     expect(delegationState.getDelegation('ses_del')).toBeNull();
+  });
+});
+
+describe('createPluginInterface — stale and replay gate (04-02)', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of tempDirs) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    tempDirs.length = 0;
+  });
+
+  function makeTempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'gstack-pi-gate-test-'));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  const makeCompanyState = (overrides: Partial<CompanyState> = {}): CompanyState => ({
+    version: 1,
+    visible_agent: 'company',
+    source: 'canonical',
+    started_at: '2026-04-09T00:00:00.000Z',
+    updated_at: '2026-04-09T00:00:00.000Z',
+    session_ids: ['sess-gate'],
+    workflow_id: 'wf-gate-1',
+    current_attempt: 1,
+    retry_lineage: {
+      parent_workflow_id: 'wf-gate-1',
+      current_attempt: 1,
+      child_attempt_ids: [],
+      safe_retry_checkpoint_ids: [],
+    },
+    ownership: COMPANY_ARTIFACT_OWNERSHIP,
+    ...overrides,
+  });
+
+  const makeClassifiedIntent = (
+    overrides: Partial<ReturnType<Orchestrator['classify']>> = {}
+  ): ReturnType<Orchestrator['classify']> => ({
+    phase: 'build',
+    confidence: 0.8,
+    suggestedAgent: 'builder',
+    suggestedSkills: [],
+    reasoning: 'Matched 2 patterns for build',
+    ...overrides,
+  });
+
+  const mockMcpManager = {
+    disconnectSession: async (): Promise<void> => {},
+    disconnectAll: async (): Promise<void> => {},
+  };
+
+  const mockHookRegistry: HookRegistry = {
+    register: () => {},
+    dispatch: async () => {},
+    getHandlerCount: () => 0,
+  };
+
+  const multiAgentCompanyConfig = GstackConfigSchema.parse({
+    orchestration_mode: 'multi-agent',
+    agent_surface: { mode: 'company' },
+  }) as GstackConfig;
+
+  function createStatefulManagers(
+    options?: { companyState?: CompanyState | null },
+    directory?: string
+  ): Managers {
+    let companyState = options?.companyState ?? null;
+    const checkpoints: CompanyCheckpoint[] = [];
+
+    return {
+      configHandler: async (): Promise<void> => {},
+      skillMcpManager: mockMcpManager as unknown as Managers['skillMcpManager'],
+      sprintBacklog: {} as unknown as Managers['sprintBacklog'],
+      mcpInvoker: new DeferredMcpInvoker(),
+      workspaceState: {
+        boulder: {
+          read: () => null,
+          write: () => true,
+          append: () => null,
+          clear: () => false,
+          upsert: () => null,
+        },
+        plans: {} as unknown as Managers['workspaceState']['plans'],
+        sessions: {
+          start: async () => null as unknown,
+          complete: async () => null,
+          getActive: async () => [],
+          cleanup: async () => 0,
+        } as unknown as Managers['workspaceState']['sessions'],
+        reviews: {} as unknown as Managers['workspaceState']['reviews'],
+        notepads: () => ({}) as unknown as ReturnType<Managers['workspaceState']['notepads']>,
+        ensureDir: () => {},
+        company: {
+          read: () => companyState,
+          readResolved: () => companyState,
+          write: (state: CompanyState) => {
+            companyState = state;
+            if (directory) {
+              writeCompanyState(directory, state);
+            }
+            return true;
+          },
+          appendLog: () => {},
+          readLog: () => [],
+          writeCheckpoint: (checkpoint: CompanyCheckpoint) => {
+            checkpoints.push(checkpoint);
+            return true;
+          },
+          readCheckpoint: (checkpointId: string) =>
+            checkpoints.find((c) => c.id === checkpointId) ?? null,
+          writeDecisionWait: (wait) => {
+            if (!companyState) return false;
+            companyState = { ...companyState, pending_decision_wait: wait };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+          resolveDecisionWait: (waitId: string, answer: string) => {
+            if (
+              !companyState?.pending_decision_wait ||
+              companyState.pending_decision_wait.id !== waitId
+            ) {
+              return false;
+            }
+            companyState = {
+              ...companyState,
+              pending_decision_wait: {
+                ...companyState.pending_decision_wait,
+                status: 'answered',
+                answer,
+                answered_at: new Date().toISOString(),
+              },
+            };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+          archiveDecisionWait: (waitId: string) => {
+            if (
+              !companyState?.pending_decision_wait ||
+              companyState.pending_decision_wait.id !== waitId
+            ) {
+              return false;
+            }
+            companyState = {
+              ...companyState,
+              pending_decision_wait: undefined,
+              archived_decision_waits: [
+                ...(companyState.archived_decision_waits ?? []),
+                { ...companyState.pending_decision_wait!, status: 'archived' },
+              ],
+            };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+          registerSafeRetryCheckpoint: (checkpointId: string) => {
+            if (!companyState?.retry_lineage) return false;
+            companyState = {
+              ...companyState,
+              retry_lineage: {
+                ...companyState.retry_lineage,
+                safe_retry_checkpoint_ids:
+                  companyState.retry_lineage.safe_retry_checkpoint_ids.includes(checkpointId)
+                    ? companyState.retry_lineage.safe_retry_checkpoint_ids
+                    : [...companyState.retry_lineage.safe_retry_checkpoint_ids, checkpointId],
+              },
+            };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+          recordRetryAttempt: (checkpointId: string) => {
+            if (!companyState?.retry_lineage) return false;
+            if (!companyState.retry_lineage.safe_retry_checkpoint_ids.includes(checkpointId)) {
+              return false;
+            }
+            const nextAttempt = companyState.retry_lineage.current_attempt + 1;
+            companyState = {
+              ...companyState,
+              current_attempt: nextAttempt,
+              retry_lineage: {
+                ...companyState.retry_lineage,
+                current_attempt: nextAttempt,
+                child_attempt_ids: [
+                  ...companyState.retry_lineage.child_attempt_ids,
+                  `${companyState.workflow_id}:attempt:${nextAttempt}`,
+                ],
+                last_retry_checkpoint_id: checkpointId,
+              },
+            };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+        },
+      },
+      analytics: {} as unknown as Managers['analytics'],
+    };
+  }
+
+  it('Test 1: a duplicate messageID answer is ignored and does not call classify or delegate', async () => {
+    const dir = makeTempDir();
+    const wait = createDecisionWait({
+      workflowId: 'wf-gate-1',
+      checkpointId: 'cp-gate-1',
+      question: 'Proceed with build?',
+      phase: 'build',
+    });
+    const initialState = makeCompanyState({
+      last_checkpoint_id: 'cp-gate-1',
+      pending_decision_wait: wait,
+    });
+    writeCompanyState(dir, initialState);
+
+    const messageID = 'msg-dup-001';
+    registerDecisionAnswerInState(dir, wait.id, messageID);
+
+    const statefulManagers = createStatefulManagers({ companyState: initialState }, dir);
+
+    let classifyCalls = 0;
+    let delegateCalls = 0;
+    const orchestrator: Orchestrator = {
+      classify: () => {
+        classifyCalls += 1;
+        return makeClassifiedIntent();
+      },
+      delegate: () => {
+        delegateCalls += 1;
+        return null;
+      },
+    };
+    const delegationState = new DelegationStateManager();
+    delegationState.setPendingContext('sess-gate', {
+      prompt: 'Proceed with build?',
+      kind: 'confirm',
+      phase: 'build',
+      requestText: 'build feature',
+      workflowId: 'wf-gate-1',
+      checkpointId: 'cp-gate-1',
+      pendingWaitId: wait.id,
+      deferredIntent: makeClassifiedIntent(),
+    });
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-gate', messageID },
+      { message: null, parts: [{ type: 'text', text: 'yes' }] }
+    );
+
+    expect(classifyCalls).toBe(0);
+    expect(delegateCalls).toBe(0);
+    const state = statefulManagers.workspaceState.company.read();
+    expect(state?.visible_context?.status_summary).toContain('already recorded');
+  });
+
+  it('Test 2: a control answer with no messageID uses fallback key and deduplicates', async () => {
+    const dir = makeTempDir();
+    const wait = createDecisionWait({
+      workflowId: 'wf-gate-2',
+      checkpointId: 'cp-gate-2',
+      question: 'Proceed with build?',
+      phase: 'build',
+    });
+    const initialState = makeCompanyState({
+      workflow_id: 'wf-gate-2',
+      last_checkpoint_id: 'cp-gate-2',
+      pending_decision_wait: wait,
+    });
+    writeCompanyState(dir, initialState);
+
+    const fallbackKey = `${wait.id}:yes`;
+    registerDecisionAnswerInState(dir, wait.id, fallbackKey);
+
+    const statefulManagers = createStatefulManagers({ companyState: initialState }, dir);
+
+    let classifyCalls = 0;
+    let delegateCalls = 0;
+    const orchestrator: Orchestrator = {
+      classify: () => {
+        classifyCalls += 1;
+        return makeClassifiedIntent();
+      },
+      delegate: () => {
+        delegateCalls += 1;
+        return null;
+      },
+    };
+    const delegationState = new DelegationStateManager();
+    delegationState.setPendingContext('sess-gate', {
+      prompt: 'Proceed?',
+      kind: 'confirm',
+      phase: 'build',
+      requestText: 'build feature',
+      workflowId: 'wf-gate-2',
+      checkpointId: 'cp-gate-2',
+      pendingWaitId: wait.id,
+      deferredIntent: makeClassifiedIntent(),
+    });
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-gate' },
+      { message: null, parts: [{ type: 'text', text: 'yes' }] }
+    );
+
+    expect(classifyCalls).toBe(0);
+    expect(delegateCalls).toBe(0);
+    const state = statefulManagers.workspaceState.company.read();
+    expect(state?.visible_context?.status_summary).toContain('already recorded');
+  });
+
+  it('Test 3: a yes/no/retry answer is marked stale when checkpoint id does not match', async () => {
+    const dir = makeTempDir();
+    const wait = createDecisionWait({
+      workflowId: 'wf-gate-3',
+      checkpointId: 'cp-old-3',
+      question: 'Proceed?',
+      phase: 'build',
+    });
+    const initialState = makeCompanyState({
+      workflow_id: 'wf-gate-3',
+      last_checkpoint_id: 'cp-new-3',
+      pending_decision_wait: wait,
+    });
+    writeCompanyState(dir, initialState);
+
+    const statefulManagers = createStatefulManagers({ companyState: initialState }, dir);
+
+    let classifyCalls = 0;
+    let delegateCalls = 0;
+    const orchestrator: Orchestrator = {
+      classify: () => {
+        classifyCalls += 1;
+        return makeClassifiedIntent();
+      },
+      delegate: () => {
+        delegateCalls += 1;
+        return null;
+      },
+    };
+    const delegationState = new DelegationStateManager();
+    delegationState.setPendingContext('sess-gate', {
+      prompt: 'Proceed?',
+      kind: 'confirm',
+      phase: 'build',
+      requestText: 'build feature',
+      workflowId: 'wf-gate-3',
+      checkpointId: 'cp-old-3',
+      pendingWaitId: wait.id,
+      deferredIntent: makeClassifiedIntent(),
+    });
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-gate' },
+      { message: null, parts: [{ type: 'text', text: 'yes' }] }
+    );
+
+    expect(classifyCalls).toBe(0);
+    expect(delegateCalls).toBe(0);
+  });
+
+  it('Test 4: a stale answer updates visible_context with recovery recommendation and does not fork workflow', async () => {
+    const dir = makeTempDir();
+    const wait = createDecisionWait({
+      workflowId: 'wf-gate-4',
+      checkpointId: 'cp-old-4',
+      question: 'Proceed?',
+      phase: 'build',
+    });
+    const initialState = makeCompanyState({
+      workflow_id: 'wf-gate-4-new',
+      last_checkpoint_id: 'cp-gate-4',
+      pending_decision_wait: wait,
+    });
+    writeCompanyState(dir, initialState);
+
+    const statefulManagers = createStatefulManagers({ companyState: initialState }, dir);
+
+    let classifyCalls = 0;
+    let delegateCalls = 0;
+    const orchestrator: Orchestrator = {
+      classify: () => {
+        classifyCalls += 1;
+        return makeClassifiedIntent();
+      },
+      delegate: () => {
+        delegateCalls += 1;
+        return null;
+      },
+    };
+    const delegationState = new DelegationStateManager();
+    delegationState.setPendingContext('sess-gate', {
+      prompt: 'Proceed?',
+      kind: 'confirm',
+      phase: 'build',
+      requestText: 'build feature',
+      workflowId: 'wf-gate-4',
+      checkpointId: 'cp-old-4',
+      pendingWaitId: wait.id,
+      deferredIntent: makeClassifiedIntent(),
+    });
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-gate' },
+      { message: null, parts: [{ type: 'text', text: 'yes' }] }
+    );
+
+    expect(classifyCalls).toBe(0);
+    expect(delegateCalls).toBe(0);
+    const state = statefulManagers.workspaceState.company.read();
+    expect(state?.visible_context?.status_summary).toContain('stale');
   });
 });
