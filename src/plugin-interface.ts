@@ -393,7 +393,9 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
                 companyState?.execution_context?.retry_safe === true &&
                 companyState.last_checkpoint_id
               ) {
-                recordRetryAttemptInState(ctx.directory, companyState.last_checkpoint_id);
+                managers.workspaceState.company.recordRetryAttempt?.(
+                  companyState.last_checkpoint_id
+                );
                 const refreshed = managers.workspaceState.company.read();
                 if (refreshed) {
                   managers.workspaceState.company.write({
@@ -406,6 +408,7 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
                     updated_at: new Date().toISOString(),
                   });
                 }
+                return;
               } else if (RETRY_COMPANY_REQUEST_REGEX.test(text) && companyState) {
                 managers.workspaceState.company.write({
                   ...companyState,
@@ -416,6 +419,7 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
                   },
                   updated_at: new Date().toISOString(),
                 });
+                return;
               }
 
               if (
