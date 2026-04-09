@@ -1,4 +1,4 @@
-import type { GstackAgent, SprintPhase } from '../../types/agent.ts';
+import type { AgentRole, GstackAgent, SprintPhase } from '../../types/agent.ts';
 import type { BuiltinSkill } from '../../types/skill.ts';
 import type { OrchestrationMode } from '../../types/config.ts';
 import type { ClassifiedIntent } from './types.ts';
@@ -10,6 +10,12 @@ export interface DelegationResult {
   phase: SprintPhase;
   reasoning: string;
   fallbackSkills?: BuiltinSkill[];
+  visibleAgent?: 'company';
+  specialistRole?: AgentRole;
+  confidence?: number;
+  workflowId?: string;
+  checkpointId?: string;
+  attempt?: number;
 }
 
 export interface DelegationOptions {

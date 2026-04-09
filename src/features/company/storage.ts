@@ -5,6 +5,7 @@ import {
   getSprintLogPath,
   getStatePath,
 } from '../../shared/path-helpers.ts';
+import { archiveDecisionWait, resolveDecisionWait } from './company-decision-wait.ts';
 import type { CompanyCheckpoint, CompanyLogEntry, CompanyState } from './types.ts';
 
 export function readCompanyState(directory: string): CompanyState | null {
@@ -42,6 +43,115 @@ export function writeCompanyState(directory: string, state: CompanyState): boole
   } catch {
     return false;
   }
+}
+
+export function writeDecisionWaitToState(
+  directory: string,
+  wait: NonNullable<CompanyState['pending_decision_wait']>
+): boolean {
+  const state = readCompanyState(directory);
+  if (!state) {
+    return false;
+  }
+
+  return writeCompanyState(directory, {
+    ...state,
+    pending_decision_wait: wait,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export function resolveDecisionWaitInState(
+  directory: string,
+  waitId: string,
+  answer: string
+): boolean {
+  const state = readCompanyState(directory);
+  if (!state?.pending_decision_wait || state.pending_decision_wait.id !== waitId) {
+    return false;
+  }
+
+  const resolved = resolveDecisionWait(state.pending_decision_wait, answer);
+  return writeCompanyState(directory, {
+    ...state,
+    pending_decision_wait: resolved,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export function archiveDecisionWaitInState(directory: string, waitId: string): boolean {
+  const state = readCompanyState(directory);
+  if (!state?.pending_decision_wait || state.pending_decision_wait.id !== waitId) {
+    return false;
+  }
+
+  const archived = archiveDecisionWait(state.pending_decision_wait);
+  if (archived.status !== 'archived') {
+    return false;
+  }
+
+  return writeCompanyState(directory, {
+    ...state,
+    pending_decision_wait: undefined,
+    archived_decision_waits: [...(state.archived_decision_waits ?? []), archived],
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export function registerSafeRetryCheckpoint(directory: string, checkpointId: string): boolean {
+  const state = readCompanyState(directory);
+  if (!state) {
+    return false;
+  }
+
+  const retryLineage = state.retry_lineage ?? {
+    parent_workflow_id: state.workflow_id,
+    current_attempt: state.current_attempt ?? 1,
+    child_attempt_ids: [],
+    safe_retry_checkpoint_ids: [],
+  };
+
+  const safeRetryCheckpointIds = retryLineage.safe_retry_checkpoint_ids.includes(checkpointId)
+    ? retryLineage.safe_retry_checkpoint_ids
+    : [...retryLineage.safe_retry_checkpoint_ids, checkpointId];
+
+  return writeCompanyState(directory, {
+    ...state,
+    retry_lineage: {
+      ...retryLineage,
+      safe_retry_checkpoint_ids: safeRetryCheckpointIds,
+    },
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export function recordRetryAttemptInState(directory: string, checkpointId: string): boolean {
+  const state = readCompanyState(directory);
+  if (!state?.workflow_id) {
+    return false;
+  }
+
+  const retryLineage = state.retry_lineage;
+  if (!retryLineage || !retryLineage.safe_retry_checkpoint_ids.includes(checkpointId)) {
+    return false;
+  }
+
+  const nextAttempt = retryLineage.current_attempt + 1;
+
+  return writeCompanyState(directory, {
+    ...state,
+    current_attempt: nextAttempt,
+    retry_lineage: {
+      ...retryLineage,
+      current_attempt: nextAttempt,
+      child_attempt_ids: [
+        ...retryLineage.child_attempt_ids,
+        `${state.workflow_id}:attempt:${nextAttempt}`,
+      ],
+      last_retry_checkpoint_id: checkpointId,
+    },
+    updated_at: new Date().toISOString(),
+  });
 }
 
 export function appendCompanyLogEntry(directory: string, entry: CompanyLogEntry): void {

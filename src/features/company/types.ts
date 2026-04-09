@@ -1,4 +1,4 @@
-import type { SprintPhase } from '../../types/agent.ts';
+import type { AgentRole, SprintPhase } from '../../types/agent.ts';
 
 /**
  * Canonical Company artifact ownership declaration.
@@ -19,6 +19,54 @@ export interface CompanyArtifactOwnership {
  * - 'legacy-boulder' — state was synthesized from the legacy boulder.json artifact
  */
 export type CompanyStateSource = 'canonical' | 'legacy-boulder';
+
+export type DecisionWaitStatus = 'pending' | 'answered' | 'archived';
+
+export interface DeferredClassifiedIntent {
+  phase: SprintPhase;
+  confidence: number;
+  suggested_agent: AgentRole;
+  suggested_skills: string[];
+  reasoning: string;
+}
+
+export interface DecisionWait {
+  id: string;
+  workflow_id: string;
+  checkpoint_id: string;
+  question: string;
+  phase: SprintPhase;
+  status: DecisionWaitStatus;
+  created_at: string;
+  answered_at?: string;
+  answer?: string;
+}
+
+export interface CompanyVisibleContext {
+  current_goal?: string;
+  current_step?: string;
+  status_summary?: string;
+  pending_user_decision?: string;
+  deferred_request_text?: string;
+}
+
+export interface CompanyExecutionContext {
+  specialist_role?: string;
+  classified_phase?: SprintPhase;
+  confidence?: number;
+  trace_visibility?: 'hidden' | 'debug';
+  retry_safe?: boolean;
+  retry_reason?: string;
+  deferred_classified_intent?: DeferredClassifiedIntent;
+}
+
+export interface CompanyRetryLineage {
+  parent_workflow_id?: string;
+  current_attempt: number;
+  child_attempt_ids: string[];
+  safe_retry_checkpoint_ids: string[];
+  last_retry_checkpoint_id?: string;
+}
 
 /**
  * Canonical Company runtime snapshot.
@@ -45,8 +93,15 @@ export interface CompanyState {
   current_phase?: SprintPhase;
   /** Role key of the specialist the Company has delegated to, if any */
   active_specialist?: string;
+  workflow_id?: string;
+  current_attempt?: number;
   /** ID of the last recovery checkpoint written, if any */
   last_checkpoint_id?: string;
+  visible_context?: CompanyVisibleContext;
+  execution_context?: CompanyExecutionContext;
+  retry_lineage?: CompanyRetryLineage;
+  pending_decision_wait?: DecisionWait;
+  archived_decision_waits?: DecisionWait[];
   /** Canonical artifact ownership declaration for downstream consumers */
   ownership: CompanyArtifactOwnership;
 }

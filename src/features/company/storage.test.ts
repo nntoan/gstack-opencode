@@ -4,12 +4,18 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   appendCompanyLogEntry,
+  archiveDecisionWaitInState,
+  recordRetryAttemptInState,
+  registerSafeRetryCheckpoint,
   readCompanyCheckpoint,
   readCompanyLogEntries,
   readCompanyState,
+  resolveDecisionWaitInState,
+  writeDecisionWaitToState,
   writeCompanyCheckpoint,
   writeCompanyState,
 } from './storage.ts';
+import { createDecisionWait } from './company-decision-wait.ts';
 import type { CompanyCheckpoint, CompanyLogEntry, CompanyState } from './types.ts';
 import { COMPANY_ARTIFACT_OWNERSHIP } from './types.ts';
 
@@ -156,6 +162,137 @@ describe('company/storage', () => {
 
       const entries = readCompanyLogEntries(dir);
       expect(entries).toHaveLength(5);
+    });
+  });
+
+  describe('decision wait persistence helpers', () => {
+    it('writeDecisionWaitToState stores a pending record and updates updated_at', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      const initial = makeCanonicalState({
+        workflow_id: 'workflow-1',
+        updated_at: '2026-01-01T00:00:00Z',
+      });
+      writeCompanyState(dir, initial);
+
+      const wait = createDecisionWait({
+        workflowId: 'workflow-1',
+        checkpointId: 'checkpoint-1',
+        question: 'The Company needs your approval to continue.',
+        phase: 'build',
+        createdAt: '2026-01-01T00:01:00Z',
+      });
+
+      expect(writeDecisionWaitToState(dir, wait)).toBe(true);
+
+      const updated = readCompanyState(dir);
+      expect(updated?.pending_decision_wait).toEqual(wait);
+      expect(updated?.updated_at).not.toBe('2026-01-01T00:00:00Z');
+    });
+
+    it('resolveDecisionWaitInState resolves only the matching wait and ignores duplicate answers', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      const wait = createDecisionWait({
+        workflowId: 'workflow-1',
+        checkpointId: 'checkpoint-1',
+        question: 'The Company needs your approval to continue.',
+        phase: 'build',
+      });
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({ workflow_id: 'workflow-1', pending_decision_wait: wait })
+      );
+
+      expect(resolveDecisionWaitInState(dir, wait.id, 'approved')).toBe(true);
+      const once = readCompanyState(dir);
+      expect(once?.pending_decision_wait?.status).toBe('answered');
+      expect(once?.pending_decision_wait?.answer).toBe('approved');
+
+      expect(resolveDecisionWaitInState(dir, wait.id, 'rejected')).toBe(true);
+      const twice = readCompanyState(dir);
+      expect(twice?.pending_decision_wait?.answer).toBe('approved');
+    });
+
+    it('archiveDecisionWaitInState moves answered waits into append-only history', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      const wait = createDecisionWait({
+        workflowId: 'workflow-1',
+        checkpointId: 'checkpoint-1',
+        question: 'The Company needs your approval to continue.',
+        phase: 'build',
+      });
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({ workflow_id: 'workflow-1', pending_decision_wait: wait })
+      );
+      resolveDecisionWaitInState(dir, wait.id, 'approved');
+
+      expect(archiveDecisionWaitInState(dir, wait.id)).toBe(true);
+
+      const updated = readCompanyState(dir);
+      expect(updated?.pending_decision_wait).toBeUndefined();
+      expect(updated?.archived_decision_waits).toHaveLength(1);
+      expect(updated?.archived_decision_waits?.[0]?.status).toBe('archived');
+      expect(updated?.workflow_id).toBe('workflow-1');
+    });
+
+    it('registerSafeRetryCheckpoint appends a checkpoint id exactly once', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({
+          workflow_id: 'workflow-1',
+          current_attempt: 1,
+          retry_lineage: {
+            parent_workflow_id: 'workflow-1',
+            current_attempt: 1,
+            child_attempt_ids: [],
+            safe_retry_checkpoint_ids: [],
+          },
+        })
+      );
+
+      expect(registerSafeRetryCheckpoint(dir, 'checkpoint-1')).toBe(true);
+      expect(registerSafeRetryCheckpoint(dir, 'checkpoint-1')).toBe(true);
+
+      const updated = readCompanyState(dir);
+      expect(updated?.retry_lineage?.safe_retry_checkpoint_ids).toEqual(['checkpoint-1']);
+    });
+
+    it('recordRetryAttemptInState increments attempt and records retry lineage', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({
+          workflow_id: 'workflow-1',
+          current_attempt: 1,
+          retry_lineage: {
+            parent_workflow_id: 'workflow-1',
+            current_attempt: 1,
+            child_attempt_ids: [],
+            safe_retry_checkpoint_ids: ['checkpoint-1'],
+          },
+        })
+      );
+
+      expect(recordRetryAttemptInState(dir, 'checkpoint-1')).toBe(true);
+
+      const updated = readCompanyState(dir);
+      expect(updated?.current_attempt).toBe(2);
+      expect(updated?.retry_lineage?.current_attempt).toBe(2);
+      expect(updated?.retry_lineage?.child_attempt_ids).toEqual(['workflow-1:attempt:2']);
+      expect(updated?.retry_lineage?.last_retry_checkpoint_id).toBe('checkpoint-1');
     });
   });
 

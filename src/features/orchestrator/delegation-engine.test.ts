@@ -163,6 +163,30 @@ describe('delegation-engine', () => {
       });
       expect(result).toBeNull();
     });
+
+    it('accepts additive company workflow metadata fields without changing runtime behavior', () => {
+      const result = delegateIntent(baseClassified, {
+        agents: allAgents,
+        skills: allSkills,
+        orchestrationMode: 'multi-agent',
+      });
+
+      const enriched: NonNullable<typeof result> = {
+        ...result!,
+        visibleAgent: 'company',
+        specialistRole: result!.agent.role,
+        confidence: 0.9,
+        workflowId: 'workflow-1',
+        checkpointId: 'checkpoint-1',
+        attempt: 1,
+      };
+
+      expect(enriched.visibleAgent).toBe('company');
+      expect(enriched.specialistRole).toBe('reviewer');
+      expect(enriched.workflowId).toBe('workflow-1');
+      expect(enriched.checkpointId).toBe('checkpoint-1');
+      expect(enriched.attempt).toBe(1);
+    });
   });
 
   describe('#createOrchestrator', () => {
