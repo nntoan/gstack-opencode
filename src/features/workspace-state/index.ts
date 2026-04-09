@@ -12,10 +12,15 @@ import { createReviewDashboard } from './review-dashboard.ts';
 import { createSessionTracker } from './session-tracker.ts';
 import {
   appendCompanyLogEntry,
+  archiveDecisionWaitInState,
   migrateBoulderStateToCompanyState,
+  recordRetryAttemptInState,
+  registerSafeRetryCheckpoint,
   readCompanyCheckpoint,
   readCompanyLogEntries,
   readCompanyState,
+  resolveDecisionWaitInState,
+  writeDecisionWaitToState,
   writeCompanyCheckpoint,
   writeCompanyState,
 } from '../company/index.ts';
@@ -67,6 +72,16 @@ export function createWorkspaceState(directory: string) {
         writeCompanyCheckpoint(directory, checkpoint),
       readCheckpoint: (checkpointId: string): CompanyCheckpoint | null =>
         readCompanyCheckpoint(directory, checkpointId),
+      writeDecisionWait: (wait: NonNullable<CompanyState['pending_decision_wait']>): boolean =>
+        writeDecisionWaitToState(directory, wait),
+      resolveDecisionWait: (waitId: string, answer: string): boolean =>
+        resolveDecisionWaitInState(directory, waitId, answer),
+      archiveDecisionWait: (waitId: string): boolean =>
+        archiveDecisionWaitInState(directory, waitId),
+      registerSafeRetryCheckpoint: (checkpointId: string): boolean =>
+        registerSafeRetryCheckpoint(directory, checkpointId),
+      recordRetryAttempt: (checkpointId: string): boolean =>
+        recordRetryAttemptInState(directory, checkpointId),
     },
     plans: {
       getProgress: (planPath: string) => getPlanProgress(planPath),
