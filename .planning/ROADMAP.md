@@ -26,6 +26,8 @@ This roadmap is ordered to reduce product risk in the existing codebase. It foll
 
 **Goal:** make Company mode the visible default without deleting the current internal specialist system.
 
+**Status:** Complete (2026-04-07)
+
 **Requirements:** [R1, R2, R3, R10, R11, R12]
 
 **Plans:** 3 plans
@@ -34,7 +36,7 @@ Plans:
 
 - [x] 01-01-PLAN.md — establish the Company agent and `agent_surface` contracts with TDD-first coverage
 - [x] 01-02-PLAN.md — wire Company default-model and `agents.company` override loading without breaking specialists
-- [ ] 01-03-PLAN.md — enforce Company-vs-legacy host projection at the config-handler boundary
+- [x] 01-03-PLAN.md — enforce Company-vs-legacy host projection at the config-handler boundary
 
 **Why first:** this delivers the product’s core UX direction with the smallest architectural shock and creates the boundary all later work depends on.
 
@@ -67,6 +69,18 @@ Plans:
 
 **Goal:** define and implement canonical Company-owned state under `.gstack/orchestrator/`.
 
+**Status:** Complete (2026-04-08)
+
+**Requirements:** [R4, R6, R7, R8, R9, R11, R12]
+
+**Plans:** 3/3 plans complete
+
+Plans:
+
+- [x] 02-01-PLAN.md — define canonical Company artifact contracts and storage helpers for snapshot, log, and checkpoints
+- [x] 02-02-PLAN.md — add legacy Boulder migration and a canonical Company workspace facade
+- [x] 02-03-PLAN.md — switch recovery/progress/tools to canonical Company state with explicit compatibility fallback
+
 **Why now:** visibility alone is cosmetic unless orchestration state, ownership, and recovery semantics are made durable and explicit.
 
 **Targets**
@@ -75,6 +89,7 @@ Plans:
 - Define canonical current snapshot, append-only event log, and checkpoint layout.
 - Clarify artifact ownership between Company and specialists.
 - Add migration bridge for legacy orchestrator state such as `boulder.json`.
+- Move bootstrap/recovery state consumption onto canonical Company artifacts as the runtime foundation for later resume and approval work.
 
 **Likely touchpoints**
 
@@ -94,6 +109,20 @@ Plans:
 ### Phase 3 — Company orchestration and prompt projection
 
 **Goal:** make runtime behavior Company-shaped while preserving deterministic routing internals.
+
+**Status:** Complete (2026-04-09)
+
+**Requirements:** [R5, R6, R7, R10, R12, R14]
+
+**Plans:** 5/5 plans complete
+
+Plans:
+
+- [x] 03-01-PLAN.md — create Company-only prompt projection and preserve legacy prompt fallback
+- [x] 03-02-PLAN.md — extend canonical Company workflow state, decision waits, and retry metadata
+- [x] 03-03-PLAN.md — implement pure ambiguity policy and pending Company clarification context
+- [x] 03-04-PLAN.md — wire Company ask/confirm/delegate orchestration in plugin-interface
+- [x] 03-05-PLAN.md — convert recovery, progress, and trace surfaces to Company-safe runtime UX
 
 **Why here:** once visibility and state are defined, the orchestration layer can safely project one visible identity over hidden specialists.
 
@@ -215,15 +244,15 @@ Plans:
 
 ## Recommended Next Execution Step
 
-Begin with **Phase 1 — Public surface split** and treat it as a product-contract phase, not a UI cosmetic phase.
+Proceed to **Phase 4 — Approval, pause/resume, and continuity** now that Company-shaped prompt projection, orchestration, and Company-safe hook surfaces are complete.
 
-The first implementation plan should explicitly answer:
+The next implementation plan should explicitly answer:
 
-1. what the new public Company agent object looks like,
-2. how visibility mode is expressed in config,
-3. where hidden specialist registry lives,
-4. how current `agents.{role}` overrides continue to work,
-5. and how Company mode avoids leaking specialists through host config or prompt projection.
+1. how delayed approvals and repeated answers resume the same Company workflow without duplicate work,
+2. how interruption-safe checkpointing should behave across pause/resume boundaries,
+3. how specialist-originated blockers are surfaced back through The Company,
+4. how continuity flows reconstruct state from `.gstack/` artifacts rather than memory,
+5. and how Phase 4 proves idempotent approval/resume behavior under interruption.
 
 ---
 

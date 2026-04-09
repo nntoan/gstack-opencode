@@ -1,17 +1,62 @@
+---
+gsd_state_version: 1.0
+milestone: v1.0
+milestone_name: milestone
+current_phase: 04
+current_plan: 0
+status: ready
+last_updated: '2026-04-09T03:08:00.000Z'
+last_activity: 2026-04-09
+progress:
+  total_phases: 3
+  completed_phases: 3
+  total_plans: 11
+  completed_plans: 11
+  percent: 100
+---
+
 # STATE.md — Current Planning State
 
 ## Current Status
 
-**Phase 1 — Public surface split** is in active execution.
+**Status:** Phase 03 complete — ready for Phase 04
 
-Plans 01-01 and 01-02 are complete. Plan 01-03 (Company-vs-legacy host projection at the config-handler boundary) is the next execution target.
+**Current Phase:** 04
 
-- Phase 1 progress: **2 / 3 plans complete**
-- Next plan: `01-03-PLAN.md` — enforce Company-vs-legacy host projection at `config-handler.ts`
+**Current Plan:** 0
+
+**Last Activity:** 2026-04-09
+
+**Last Activity Description:** Phase 03 verification and closeout completed
+
+- Phase 1 progress: **3 / 3 plans complete**
+- Phase 2 progress: **3 / 3 plans complete**
+- Phase 3 progress: **5 / 5 plans complete**
+- Verification: `.planning/phases/03-company-orchestration-and-prompt-projection/03-VERIFICATION.md` — **passed**
+- Next step: discuss and plan Phase 4 for approval, pause/resume, and continuity
 
 ---
 
 ## Completed So Far
+
+### Phase 1 — Public surface split (complete)
+
+- Completed plans:
+  - `01-01-PLAN.md` — Company agent contract and `agent_surface` config
+  - `01-02-PLAN.md` — Company default model and override loading
+  - `01-03-PLAN.md` — Company-vs-legacy host projection at `config-handler.ts`
+- Verification passed in `.planning/phases/01-public-surface-split/01-VERIFICATION.md`
+- Implemented outcomes:
+  - one typed internal `company` agent
+  - additive `agent_surface.mode` config with `company | legacy-multi`
+  - Company default model fallback chain (`github-copilot/gpt-5.4`, medium intent)
+  - projection-only Company visibility at `src/plugin-handlers/config-handler.ts`
+  - preserved hidden-specialist configurability and legacy multi-agent compatibility
+- Validation status:
+  - `bun run test` — 831 pass, 0 fail
+  - `bun run typecheck` — clean
+  - `bun run build:all` — clean
+  - `bun run lint` — 0 errors, 1 unrelated pre-existing warning outside the phase
 
 ### Phase 1 — Plan 01: Company agent contract and agent_surface config (01-01)
 
@@ -106,30 +151,73 @@ Planning docs should remain local and should not be treated as runtime product a
 
 ## Current Roadmap Position
 
-The project is ready to move from research/planning setup into **Phase 1 planning and execution preparation**.
+**Phases 1, 2, and 3 are complete.**
+
+The project is ready to move from Company-shaped orchestration into **Phase 4 — Approval, pause/resume, and continuity**.
 
 ### Next planned implementation phase
 
-**Phase 1 — Public surface split**
+**Phase 4 — Approval, pause/resume, and continuity**
 
 Immediate planning focus:
 
-1. define the public Company agent contract,
-2. define visibility/surface config,
-3. preserve hidden specialist configurability,
-4. keep legacy compatibility explicit,
-5. identify exact code touchpoints for Phase 1.
+1. bind delayed approvals and interruptions to canonical checkpoints,
+2. resume the same Company workflow safely after pause/reload,
+3. prevent duplicate-answer and stale-session replay paths,
+4. keep specialist-originated blockers Company-voiced in the visible UX,
+5. prove continuity behavior with resume/approval/replay tests.
+
+### Phase 3 implementation result
+
+Phase 3 is no longer planned work — it is completed and verified.
+
+The completed implementation established these concrete contracts:
+
+1. **Company-safe prompt projection** now shows only The Company in visible system prompt context while preserving explicit legacy-multi compatibility.
+2. **Company workflow state** now persists decision waits, deferred intent, retry lineage, and hidden execution metadata under canonical Company state.
+3. **Company ambiguity policy** now asks, confirms, or delegates deterministically on top of the existing classifier instead of replacing routing internals.
+4. **`plugin-interface.ts`** now handles Company ask/confirm/approval, retry, debug, and interruption flows using one workflow identity.
+5. **Company-facing hook surfaces** now present goal/current-step/status wording by default and gate causality-first trace output behind explicit debug visibility.
+
+#### Phase 3 delivered change set
+
+1. Added `src/features/company/company-prompt-builder.ts`, `company-decision-wait.ts`, and `company-ambiguity-policy.ts` plus test coverage.
+2. Extended `src/features/company/types.ts`, `storage.ts`, and `src/features/workspace-state/index.ts` for decision waits and retry helpers.
+3. Updated `src/features/orchestrator/system-prompt-builder.ts`, `delegation-engine.ts`, and `delegation-state.ts` for Company projection and pending clarification state.
+4. Updated `src/plugin-interface.ts` and `src/plugin-interface.test.ts` for full Company-mode runtime orchestration.
+5. Updated `src/create-hooks.ts`, continuity hooks, and scorecard hooks for Company-safe progress, recovery, and debug-trace behavior.
+6. Verified the phase in `.planning/phases/03-company-orchestration-and-prompt-projection/03-VERIFICATION.md` with 12/12 must-have truths passing.
+
+### Phase 2 implementation result
+
+Phase 2 is no longer planned work — it is completed and verified.
+
+The completed implementation established these concrete contracts:
+
+1. **Canonical Company artifact contract** now exists under `.gstack/orchestrator/` through typed snapshot, append-only log, and checkpoint helpers.
+2. **Migration-safe fallback** reads canonical `state.json` first and legacy `boulder.json` second through `workspaceState.company.readResolved()`.
+3. **Artifact ownership** is encoded in Company-specific runtime types instead of scattered string assumptions.
+4. **Runtime consumers** such as recovery, progress, delegation context, and sprint tools now prefer canonical Company state.
+5. **Compatibility remains explicit** because legacy Boulder state is mirrored only when it already exists and is never reintroduced for canonical-only workspaces.
+
+#### Phase 2 delivered change set
+
+1. Added `src/features/company/types.ts`, `src/features/company/storage.ts`, and `src/features/company/index.ts` for canonical Company runtime artifacts.
+2. Added `src/features/company/migration.ts` and surfaced a `workspaceState.company` facade from `src/features/workspace-state/index.ts`.
+3. Updated `src/features/session-continuity/*`, `src/create-hooks.ts`, and `src/features/tools/sprint-tools.ts` to consume canonical Company state.
+4. Added migration, storage, continuity, and sprint-tool tests covering canonical-first behavior and Boulder fallback.
+5. Verified the phase in `.planning/phases/02-company-runtime-artifact-model/02-VERIFICATION.md` with 9/9 must-have truths passing.
 
 ---
 
 ## Open Questions That Still Need Resolution During Execution
 
-1. Exact config shape for Company mode (`company`, `agent_surface`, or both).
-2. Exact runtime support path for `medium` reasoning/variant.
-3. Exact migration window and fallback behavior for `boulder.json` compatibility.
+1. Exact delayed-approval resume contract across interruptions and stale session restarts.
+2. Exact checkpoint lifecycle for paused Company workflows when user input arrives much later.
+3. Exact replay protections for duplicate answers, retries, and stale decision contexts in Phase 4.
 4. Which expert-mode commands remain in v1.
 
-These are roadmap execution details, not blockers for beginning implementation planning.
+These are roadmap execution details for the next phase, not blockers for beginning Phase 4 planning.
 
 ---
 
@@ -161,53 +249,55 @@ These are roadmap execution details, not blockers for beginning implementation p
 - `src/create-hooks.ts`
 - `src/features/workspace-state/`
 
+### Key codebase touchpoints for the next implementation phase
+
+- `src/plugin-interface.ts`
+- `src/features/orchestrator/*`
+- `src/create-hooks.ts`
+- `src/features/company/*`
+- prompt-building and delegation-state seams proven in Phase 2 consumers
+
 ---
 
 ## What Should Happen Next
 
-The next useful step is to convert **Phase 1** from roadmap text into an implementation plan against the real codebase.
+The next useful step is to convert **Phase 4** from roadmap text into a codebase-grounded context and implementation plan.
 
 That next pass should:
 
-1. inspect the current public agent registration path in detail,
-2. inspect current config schema and override loading,
-3. decide the minimum additive config shape for Company mode,
-4. identify tests to add before touching behavior,
-5. then produce a Phase 1 implementation plan.
+1. inspect how canonical Company checkpoints and pending waits are currently written and cleared,
+2. inspect how session deletion, retry, and delayed answers behave across restarts,
+3. decide the minimum idempotent approval/resume contract for pause/reload safety,
+4. identify the tests needed before changing continuity behavior,
+5. then produce a Phase 4 implementation plan.
 
-### Phase 1 implementation plan now grounded in code
+### Phase 1 implementation result
 
-The initial code inspection confirmed these concrete Phase 1 seams:
+Phase 1 is no longer a plan — it is completed work.
 
-1. **Runtime agent inventory** is created in `src/agents/index.ts` and filtered by `createGstackAgents()`.
-2. **Runtime agent overrides** are applied in `src/create-skills-and-agents.ts` from `config.agents?.[role]`.
-3. **Host-visible agent projection** is centralized in `src/plugin-handlers/config-handler.ts`, especially:
-   - `agentsToOpenCodeAgentConfig()`
-   - `applyAgentConfig()`
-4. **Current coupling problem**: `disabled_agents` currently affects both runtime availability and host visibility.
-5. **Existing unused seam**: `AgentOverrideConfig.enabled` exists in schema/types but is not currently enforced by runtime or host projection logic.
+The completed implementation established these concrete contracts:
 
-This means Phase 1 should be implemented as a **visibility split**, not a runtime rewrite.
+1. **Runtime agent inventory** includes `company` in `src/agents/index.ts` and keeps a single internal registry.
+2. **Runtime agent overrides** continue to flow through `src/create-skills-and-agents.ts` from `config.agents?.[role]`, including `agents.company`.
+3. **Host-visible agent projection** in `src/plugin-handlers/config-handler.ts` now branches on `agent_surface.mode`.
+4. **Company visibility** is projection-only and no longer coupled to `disabled_agents`.
+5. **Legacy compatibility** remains explicit via `agent_surface.mode = 'legacy-multi'`.
 
-#### Proposed Phase 1 change set
+#### Phase 1 delivered change set
 
-1. Add a new public agent definition for `company` under `src/agents/company.ts`.
-2. Add `company` to `src/agents/index.ts` so it becomes part of the runtime registry.
-3. Extend config schema/types additively for a Company-facing surface mode, likely via a new `agent_surface` config object rather than overloading `orchestration_mode`.
-4. Update `src/plugin-handlers/config-handler.ts` so Company mode publishes only the public Company agent to host `config.agent` while preserving hidden specialist overrides in plugin config/runtime.
-5. Decide whether `AgentOverrideConfig.enabled` should become the first explicit host-visibility control, or whether host visibility should instead be governed entirely by the new `agent_surface` mode. Current evidence suggests `disabled_agents` should stop carrying both meanings.
-6. Add/adjust tests in:
-   - `src/plugin-handlers/config-handler.test.ts`
-   - `src/create-skills-and-agents.test.ts`
-   - schema/config tests for any new config shape
+1. Added `src/agents/company.ts` and registered `company` in the runtime registry.
+2. Extended config schema/types with `agent_surface.mode` and `reasoning_effort` support.
+3. Added Company default fallback chain support in `src/cli/model-default-chains.ts`.
+4. Updated `src/plugin-handlers/config-handler.ts` so Company mode publishes only the Company agent to host `config.agent`.
+5. Added and updated tests for registry, schema, override loading, and host projection.
 
-#### Phase 1 design guardrails
+#### Phase 1 guardrails that remain important
 
 - Do not remove specialist agents from runtime composition yet.
 - Do not change orchestrator routing logic yet.
 - Do not make `.planning/` part of runtime behavior.
-- Do not rely on `disabled_agents` alone for Company-mode visibility, because that would also disable specialists internally.
-- Prefer additive config evolution over breaking migration.
+- Keep `disabled_agents` separate from Company-mode visibility control.
+- Prefer additive evolution over breaking migration.
 
 ---
 
@@ -217,9 +307,10 @@ If work resumes later, start from these files in order:
 
 1. `.planning/STATE.md`
 2. `.planning/ROADMAP.md`
-3. `.planning/phases/01-public-surface-split/01-03-PLAN.md`
-4. `.planning/phases/01-public-surface-split/01-CONTEXT.md`
-5. `src/plugin-handlers/config-handler.ts` and `src/plugin-handlers/config-handler.test.ts`
+3. `.planning/phases/01-public-surface-split/01-VERIFICATION.md`
+4. `.planning/phases/01-public-surface-split/01-03-SUMMARY.md`
+5. `.planning/phases/03-company-orchestration-and-prompt-projection/03-VERIFICATION.md`
+6. files relevant to the active next phase
 
 ---
 
@@ -232,4 +323,4 @@ If work resumes later, start from these files in order:
 
 ---
 
-_Updated: 2026-04-07_
+_Updated: 2026-04-09_
