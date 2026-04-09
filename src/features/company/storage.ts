@@ -5,8 +5,18 @@ import {
   getSprintLogPath,
   getStatePath,
 } from '../../shared/path-helpers.ts';
-import { archiveDecisionWait, resolveDecisionWait } from './company-decision-wait.ts';
-import type { CompanyCheckpoint, CompanyLogEntry, CompanyState } from './types.ts';
+import {
+  archiveDecisionWait,
+  markDecisionWaitStale,
+  registerDecisionAnswerKey,
+  resolveDecisionWait,
+} from './company-decision-wait.ts';
+import type {
+  CompanyCheckpoint,
+  CompanyLogEntry,
+  CompanyState,
+  DecisionWaitStaleReason,
+} from './types.ts';
 
 export function readCompanyState(directory: string): CompanyState | null {
   const filePath = getStatePath(directory);
@@ -220,4 +230,67 @@ export function readCompanyCheckpoint(
   } catch {
     return null;
   }
+}
+
+export function markDecisionWaitStaleInState(
+  directory: string,
+  waitId: string,
+  reason: DecisionWaitStaleReason,
+  supersededByCheckpointId?: string
+): boolean {
+  const state = readCompanyState(directory);
+  if (!state?.pending_decision_wait || state.pending_decision_wait.id !== waitId) {
+    return false;
+  }
+
+  const staled = markDecisionWaitStale(
+    state.pending_decision_wait,
+    reason,
+    supersededByCheckpointId
+  );
+
+  return writeCompanyState(directory, {
+    ...state,
+    pending_decision_wait: staled,
+    updated_at: new Date().toISOString(),
+  });
+}
+
+export function registerDecisionAnswerInState(
+  directory: string,
+  waitId: string,
+  answerKey: string
+): 'recorded' | 'duplicate' | 'missing' {
+  const state = readCompanyState(directory);
+  if (!state?.pending_decision_wait || state.pending_decision_wait.id !== waitId) {
+    return 'missing';
+  }
+
+  const result = registerDecisionAnswerKey(state.pending_decision_wait, answerKey);
+
+  if (result === false) {
+    return 'duplicate';
+  }
+
+  const written = writeCompanyState(directory, {
+    ...state,
+    pending_decision_wait: result,
+    updated_at: new Date().toISOString(),
+  });
+
+  return written ? 'recorded' : 'missing';
+}
+
+export function getLatestSafeCheckpointId(directory: string): string | null {
+  const state = readCompanyState(directory);
+  if (!state) {
+    return null;
+  }
+
+  const safeIds = state.retry_lineage?.safe_retry_checkpoint_ids;
+  if (safeIds && safeIds.length > 0) {
+    return safeIds[safeIds.length - 1] ?? null;
+  }
+
+  return state.last_checkpoint_id ?? null;
 }
