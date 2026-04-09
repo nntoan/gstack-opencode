@@ -14,7 +14,10 @@ import { createDecisionWait } from './features/company/company-decision-wait.ts'
 import {
   archiveDecisionWaitInState,
   COMPANY_ARTIFACT_OWNERSHIP,
+  getLatestSafeCheckpointId,
+  markDecisionWaitStaleInState,
   recordRetryAttemptInState,
+  registerDecisionAnswerInState,
   resolveDecisionWaitInState,
 } from './features/company/index.ts';
 import type { CompanyState, DeferredClassifiedIntent } from './features/company/index.ts';
@@ -315,6 +318,66 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
               const pendingContext = delegationState.getPendingContext(sessionId);
               const companyState = managers.workspaceState.company.read();
               const pendingWait = companyState?.pending_decision_wait;
+
+              const isControlMessage =
+                ACCEPT_COMPANY_DECISION_REGEX.test(text) ||
+                REJECT_COMPANY_DECISION_REGEX.test(text) ||
+                RETRY_COMPANY_REQUEST_REGEX.test(text);
+
+              if (pendingWait && isControlMessage) {
+                const answerKey =
+                  input?.messageID?.trim() || `${pendingWait.id}:${text.trim().toLowerCase()}`;
+                const registerResult = registerDecisionAnswerInState(
+                  ctx.directory,
+                  pendingWait.id,
+                  answerKey
+                );
+
+                if (registerResult === 'duplicate') {
+                  managers.workspaceState.company.write({
+                    ...companyState!,
+                    visible_context: {
+                      ...companyState!.visible_context,
+                      status_summary:
+                        'The Company already recorded that answer and kept the workflow on its current path.',
+                    },
+                    updated_at: new Date().toISOString(),
+                  });
+                  return;
+                }
+
+                const isStaleSession =
+                  pendingContext && pendingContext.pendingWaitId !== pendingWait.id;
+                const isStaleWorkflow = pendingWait.workflow_id !== companyState?.workflow_id;
+                const isStaleCheckpoint =
+                  pendingWait.checkpoint_id !== companyState?.last_checkpoint_id;
+
+                if (isStaleSession || isStaleWorkflow || isStaleCheckpoint) {
+                  const staleReason = isStaleWorkflow
+                    ? 'workflow-mismatch'
+                    : isStaleCheckpoint
+                      ? 'checkpoint-mismatch'
+                      : 'session-turnover';
+                  const safeCheckpointId = getLatestSafeCheckpointId(ctx.directory) ?? undefined;
+                  markDecisionWaitStaleInState(
+                    ctx.directory,
+                    pendingWait.id,
+                    staleReason,
+                    safeCheckpointId
+                  );
+                  managers.workspaceState.company.write({
+                    ...companyState!,
+                    visible_context: {
+                      ...companyState!.visible_context,
+                      status_summary: safeCheckpointId
+                        ? `That answer is stale — the workflow has moved on. Resume from the latest safe checkpoint (${safeCheckpointId}) or describe a fresh direction.`
+                        : 'That answer is stale — the workflow has moved on. Describe a fresh direction to continue.',
+                    },
+                    updated_at: new Date().toISOString(),
+                  });
+                  return;
+                }
+              }
 
               if (DEBUG_COMPANY_REQUEST_REGEX.test(text) && companyState) {
                 managers.workspaceState.company.write({

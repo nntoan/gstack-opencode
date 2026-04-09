@@ -15,7 +15,10 @@ export { COMPANY_ARTIFACT_OWNERSHIP } from './types.ts';
 export {
   appendCompanyLogEntry,
   archiveDecisionWaitInState,
+  getLatestSafeCheckpointId,
+  markDecisionWaitStaleInState,
   recordRetryAttemptInState,
+  registerDecisionAnswerInState,
   registerSafeRetryCheckpoint,
   readCompanyCheckpoint,
   readCompanyLogEntries,
