@@ -107,4 +107,51 @@ describe('buildDelegationSystemPrompt', () => {
     expect(prompt).toContain('### Active Skills');
     expect(prompt).toContain('#### /review');
   });
+
+  it('routes company mode through the company builder and hides specialist identity', () => {
+    const result: DelegationResult = {
+      agent: makeAgent('builder', 'You are Builder and should deliver build work.'),
+      skills: [makeSkill('implement')],
+      phase: 'build',
+      reasoning: 'fallback to builder',
+    };
+
+    const prompt = buildDelegationSystemPrompt(result, { mode: 'company' });
+
+    expect(prompt).toContain('## The Company — Active Context');
+    expect(prompt).toContain('### Available Capabilities');
+    expect(prompt).toContain('- **/implement**: implement skill description');
+    expect(prompt).not.toContain('## Active Agent Context');
+    expect(prompt).not.toContain('**Agent:** builder (builder)');
+    expect(prompt).not.toContain('fallback to builder');
+  });
+
+  it('preserves legacy-multi output when explicitly selected', () => {
+    const result: DelegationResult = {
+      agent: makeAgent('builder', 'Always write tests first.'),
+      skills: [makeSkill('implement')],
+      phase: 'build',
+      reasoning: 'Pattern matched build phase',
+    };
+
+    const prompt = buildDelegationSystemPrompt(result, { mode: 'legacy-multi' });
+
+    expect(prompt).toContain('## Active Agent Context');
+    expect(prompt).toContain('**Agent:** builder (builder)');
+    expect(prompt).toContain('#### /implement');
+  });
+
+  it('defaults to legacy behavior when no options are provided', () => {
+    const result: DelegationResult = {
+      agent: makeAgent('reviewer'),
+      skills: [],
+      phase: 'review',
+      reasoning: 'Explicit /review command',
+    };
+
+    const prompt = buildDelegationSystemPrompt(result);
+
+    expect(prompt).toContain('## Active Agent Context');
+    expect(prompt).toContain('**Agent:** reviewer (reviewer)');
+  });
 });

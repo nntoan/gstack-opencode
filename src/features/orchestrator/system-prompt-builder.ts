@@ -1,6 +1,25 @@
+import type { AgentSurfaceMode } from '../../types/config.ts';
+import { buildCompanySystemPrompt } from '../company/company-prompt-builder.ts';
 import type { DelegationResult } from './delegation-engine.ts';
 
-export function buildDelegationSystemPrompt(result: DelegationResult): string {
+export interface SystemPromptBuildOptions {
+  mode?: AgentSurfaceMode;
+}
+
+export function buildDelegationSystemPrompt(
+  result: DelegationResult,
+  options: SystemPromptBuildOptions = {}
+): string {
+  const { mode = 'legacy-multi' } = options;
+
+  if (mode === 'company') {
+    return buildCompanySystemPrompt({
+      phase: result.phase,
+      skills: result.skills.map(({ name, description }) => ({ name, description })),
+      specialistInstructions: result.agent.instructions,
+    });
+  }
+
   const lines: string[] = [];
 
   lines.push('## Active Agent Context');
