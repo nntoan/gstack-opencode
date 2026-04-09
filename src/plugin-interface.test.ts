@@ -1166,3 +1166,422 @@ describe('createPluginInterface — stale and replay gate (04-02)', () => {
     expect(state?.visible_context?.status_summary).toContain('stale');
   });
 });
+
+describe('createPluginInterface — retry replay regression (04-02)', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of tempDirs) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    tempDirs.length = 0;
+  });
+
+  function makeTempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'gstack-pi-retry-test-'));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  const makeCompanyState = (overrides: Partial<CompanyState> = {}): CompanyState => ({
+    version: 1,
+    visible_agent: 'company',
+    source: 'canonical',
+    started_at: '2026-04-09T00:00:00.000Z',
+    updated_at: '2026-04-09T00:00:00.000Z',
+    session_ids: ['sess-retry'],
+    workflow_id: 'wf-retry-1',
+    current_attempt: 1,
+    retry_lineage: {
+      parent_workflow_id: 'wf-retry-1',
+      current_attempt: 1,
+      child_attempt_ids: [],
+      safe_retry_checkpoint_ids: ['cp-retry-safe'],
+    },
+    ownership: COMPANY_ARTIFACT_OWNERSHIP,
+    ...overrides,
+  });
+
+  const makeClassifiedIntent = (
+    overrides: Partial<ReturnType<Orchestrator['classify']>> = {}
+  ): ReturnType<Orchestrator['classify']> => ({
+    phase: 'build',
+    confidence: 0.8,
+    suggestedAgent: 'builder',
+    suggestedSkills: [],
+    reasoning: 'Matched 2 patterns for build',
+    ...overrides,
+  });
+
+  const mockHookRegistry: HookRegistry = {
+    register: () => {},
+    dispatch: async () => {},
+    getHandlerCount: () => 0,
+  };
+
+  const multiAgentCompanyConfig = GstackConfigSchema.parse({
+    orchestration_mode: 'multi-agent',
+    agent_surface: { mode: 'company' },
+  }) as GstackConfig;
+
+  function createRetryStatefulManagers(
+    options?: { companyState?: CompanyState | null },
+    directory?: string
+  ): Managers {
+    let companyState = options?.companyState ?? null;
+    const checkpoints: CompanyCheckpoint[] = [];
+
+    return {
+      configHandler: async (): Promise<void> => {},
+      skillMcpManager: {
+        disconnectSession: async (): Promise<void> => {},
+        disconnectAll: async (): Promise<void> => {},
+      } as unknown as Managers['skillMcpManager'],
+      sprintBacklog: {} as unknown as Managers['sprintBacklog'],
+      mcpInvoker: new DeferredMcpInvoker(),
+      workspaceState: {
+        boulder: {
+          read: () => null,
+          write: () => true,
+          append: () => null,
+          clear: () => false,
+          upsert: () => null,
+        },
+        plans: {} as unknown as Managers['workspaceState']['plans'],
+        sessions: {
+          start: async () => null as unknown,
+          complete: async () => null,
+          getActive: async () => [],
+          cleanup: async () => 0,
+        } as unknown as Managers['workspaceState']['sessions'],
+        reviews: {} as unknown as Managers['workspaceState']['reviews'],
+        notepads: () => ({}) as unknown as ReturnType<Managers['workspaceState']['notepads']>,
+        ensureDir: () => {},
+        company: {
+          read: () => companyState,
+          readResolved: () => companyState,
+          write: (state: CompanyState) => {
+            companyState = state;
+            if (directory) {
+              writeCompanyState(directory, state);
+            }
+            return true;
+          },
+          appendLog: () => {},
+          readLog: () => [],
+          writeCheckpoint: (checkpoint: CompanyCheckpoint) => {
+            checkpoints.push(checkpoint);
+            return true;
+          },
+          readCheckpoint: (checkpointId: string) =>
+            checkpoints.find((c) => c.id === checkpointId) ?? null,
+          writeDecisionWait: (wait) => {
+            if (!companyState) return false;
+            companyState = { ...companyState, pending_decision_wait: wait };
+            if (directory) writeCompanyState(directory, companyState);
+            return true;
+          },
+          resolveDecisionWait: (waitId: string, answer: string) => {
+            if (
+              !companyState?.pending_decision_wait ||
+              companyState.pending_decision_wait.id !== waitId
+            ) {
+              return false;
+            }
+            companyState = {
+              ...companyState,
+              pending_decision_wait: {
+                ...companyState.pending_decision_wait,
+                status: 'answered',
+                answer,
+                answered_at: new Date().toISOString(),
+              },
+            };
+            if (directory) writeCompanyState(directory, companyState);
+            return true;
+          },
+          archiveDecisionWait: (waitId: string) => {
+            if (
+              !companyState?.pending_decision_wait ||
+              companyState.pending_decision_wait.id !== waitId
+            ) {
+              return false;
+            }
+            companyState = {
+              ...companyState,
+              pending_decision_wait: undefined,
+              archived_decision_waits: [
+                ...(companyState.archived_decision_waits ?? []),
+                { ...companyState.pending_decision_wait!, status: 'archived' },
+              ],
+            };
+            if (directory) writeCompanyState(directory, companyState);
+            return true;
+          },
+          registerSafeRetryCheckpoint: (checkpointId: string) => {
+            if (!companyState?.retry_lineage) return false;
+            companyState = {
+              ...companyState,
+              retry_lineage: {
+                ...companyState.retry_lineage,
+                safe_retry_checkpoint_ids:
+                  companyState.retry_lineage.safe_retry_checkpoint_ids.includes(checkpointId)
+                    ? companyState.retry_lineage.safe_retry_checkpoint_ids
+                    : [...companyState.retry_lineage.safe_retry_checkpoint_ids, checkpointId],
+              },
+            };
+            if (directory) writeCompanyState(directory, companyState);
+            return true;
+          },
+          recordRetryAttempt: (checkpointId: string) => {
+            if (!companyState?.retry_lineage) return false;
+            if (!companyState.retry_lineage.safe_retry_checkpoint_ids.includes(checkpointId)) {
+              return false;
+            }
+            const nextAttempt = companyState.retry_lineage.current_attempt + 1;
+            companyState = {
+              ...companyState,
+              current_attempt: nextAttempt,
+              retry_lineage: {
+                ...companyState.retry_lineage,
+                current_attempt: nextAttempt,
+                child_attempt_ids: [
+                  ...companyState.retry_lineage.child_attempt_ids,
+                  `${companyState.workflow_id}:attempt:${nextAttempt}`,
+                ],
+                last_retry_checkpoint_id: checkpointId,
+              },
+            };
+            if (directory) writeCompanyState(directory, companyState);
+            return true;
+          },
+        },
+      },
+      analytics: {} as unknown as Managers['analytics'],
+    };
+  }
+
+  it('Test 1: safe retry increments current_attempt exactly once', async () => {
+    const dir = makeTempDir();
+    const wait = createDecisionWait({
+      workflowId: 'wf-retry-1',
+      checkpointId: 'cp-retry-safe',
+      question: 'Proceed?',
+      phase: 'build',
+    });
+    const initialState = makeCompanyState({
+      last_checkpoint_id: 'cp-retry-safe',
+      pending_decision_wait: wait,
+      execution_context: {
+        specialist_role: 'builder',
+        classified_phase: 'build',
+        confidence: 0.8,
+        trace_visibility: 'hidden',
+        retry_safe: true,
+      },
+    });
+    writeCompanyState(dir, initialState);
+
+    const statefulManagers = createRetryStatefulManagers({ companyState: initialState }, dir);
+
+    const orchestrator: Orchestrator = {
+      classify: () => makeClassifiedIntent(),
+      delegate: () => null,
+    };
+    const delegationState = new DelegationStateManager();
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-retry' },
+      { message: null, parts: [{ type: 'text', text: 'retry' }] }
+    );
+
+    const state = statefulManagers.workspaceState.company.read();
+    expect(state?.current_attempt).toBe(2);
+    expect(state?.visible_context?.status_summary).toContain('resumed');
+  });
+
+  it('Test 2: a replayed retry request does not increment current_attempt twice', async () => {
+    const dir = makeTempDir();
+    const wait = createDecisionWait({
+      workflowId: 'wf-retry-2',
+      checkpointId: 'cp-retry-safe-2',
+      question: 'Proceed?',
+      phase: 'build',
+    });
+    const initialState = makeCompanyState({
+      workflow_id: 'wf-retry-2',
+      last_checkpoint_id: 'cp-retry-safe-2',
+      pending_decision_wait: wait,
+      retry_lineage: {
+        parent_workflow_id: 'wf-retry-2',
+        current_attempt: 1,
+        child_attempt_ids: [],
+        safe_retry_checkpoint_ids: ['cp-retry-safe-2'],
+      },
+      execution_context: {
+        specialist_role: 'builder',
+        classified_phase: 'build',
+        confidence: 0.8,
+        trace_visibility: 'hidden',
+        retry_safe: true,
+      },
+    });
+    writeCompanyState(dir, initialState);
+
+    const retryKey = `${wait.id}:retry`;
+    registerDecisionAnswerInState(dir, wait.id, retryKey);
+
+    const statefulManagers = createRetryStatefulManagers({ companyState: initialState }, dir);
+
+    const orchestrator: Orchestrator = {
+      classify: () => makeClassifiedIntent(),
+      delegate: () => null,
+    };
+    const delegationState = new DelegationStateManager();
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-retry' },
+      { message: null, parts: [{ type: 'text', text: 'retry' }] }
+    );
+
+    const state = statefulManagers.workspaceState.company.read();
+    expect(state?.current_attempt).toBe(1);
+    expect(state?.visible_context?.status_summary).toContain('already recorded');
+  });
+
+  it('Test 3: an unsafe retry leaves the workflow unchanged', async () => {
+    const dir = makeTempDir();
+    const initialState = makeCompanyState({
+      last_checkpoint_id: 'cp-unsafe',
+      retry_lineage: {
+        parent_workflow_id: 'wf-retry-1',
+        current_attempt: 1,
+        child_attempt_ids: [],
+        safe_retry_checkpoint_ids: [],
+      },
+      execution_context: {
+        specialist_role: 'builder',
+        classified_phase: 'build',
+        confidence: 0.8,
+        trace_visibility: 'hidden',
+        retry_safe: false,
+      },
+    });
+    writeCompanyState(dir, initialState);
+
+    const statefulManagers = createRetryStatefulManagers({ companyState: initialState }, dir);
+
+    const orchestrator: Orchestrator = {
+      classify: () => makeClassifiedIntent(),
+      delegate: () => null,
+    };
+    const delegationState = new DelegationStateManager();
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-retry' },
+      { message: null, parts: [{ type: 'text', text: 'retry' }] }
+    );
+
+    const state = statefulManagers.workspaceState.company.read();
+    expect(state?.current_attempt).toBe(1);
+    expect(state?.visible_context?.status_summary).toContain('cannot retry');
+  });
+
+  it('Test 4: a stale retry after session turnover becomes a recovery prompt instead of a retry attempt', async () => {
+    const dir = makeTempDir();
+    const wait = createDecisionWait({
+      workflowId: 'wf-old-4',
+      checkpointId: 'cp-old-4',
+      question: 'Proceed?',
+      phase: 'build',
+    });
+    const initialState = makeCompanyState({
+      workflow_id: 'wf-new-4',
+      last_checkpoint_id: 'cp-new-4',
+      pending_decision_wait: wait,
+      retry_lineage: {
+        parent_workflow_id: 'wf-new-4',
+        current_attempt: 1,
+        child_attempt_ids: [],
+        safe_retry_checkpoint_ids: ['cp-new-4'],
+      },
+      execution_context: {
+        specialist_role: 'builder',
+        classified_phase: 'build',
+        confidence: 0.8,
+        trace_visibility: 'hidden',
+        retry_safe: true,
+      },
+    });
+    writeCompanyState(dir, initialState);
+
+    const statefulManagers = createRetryStatefulManagers({ companyState: initialState }, dir);
+
+    const orchestrator: Orchestrator = {
+      classify: () => makeClassifiedIntent(),
+      delegate: () => null,
+    };
+    const delegationState = new DelegationStateManager();
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-retry' },
+      { message: null, parts: [{ type: 'text', text: 'retry' }] }
+    );
+
+    const state = statefulManagers.workspaceState.company.read();
+    expect(state?.current_attempt).toBe(1);
+    expect(state?.visible_context?.status_summary).toContain('stale');
+  });
+});
