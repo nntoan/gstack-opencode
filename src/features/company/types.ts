@@ -20,7 +20,21 @@ export interface CompanyArtifactOwnership {
  */
 export type CompanyStateSource = 'canonical' | 'legacy-boulder';
 
-export type DecisionWaitStatus = 'pending' | 'answered' | 'archived';
+export type DecisionWaitStatus = 'pending' | 'answered' | 'archived' | 'stale';
+
+export type DecisionWaitKind = 'ask' | 'confirm' | 'approval' | 'resume';
+
+export type DecisionWaitResolutionAction =
+  | 'delegate-deferred-intent'
+  | 'continue-same-workflow'
+  | 'offer-resume';
+
+export type DecisionWaitStaleReason =
+  | 'workflow-mismatch'
+  | 'checkpoint-mismatch'
+  | 'superseded'
+  | 'replayed-answer'
+  | 'session-turnover';
 
 export interface DeferredClassifiedIntent {
   phase: SprintPhase;
@@ -37,6 +51,12 @@ export interface DecisionWait {
   question: string;
   phase: SprintPhase;
   status: DecisionWaitStatus;
+  kind?: DecisionWaitKind;
+  resolution_action?: DecisionWaitResolutionAction;
+  stale_reason?: DecisionWaitStaleReason;
+  staled_at?: string;
+  superseded_by_checkpoint_id?: string;
+  consumed_answer_keys?: string[];
   created_at: string;
   answered_at?: string;
   answer?: string;

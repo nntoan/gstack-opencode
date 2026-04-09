@@ -115,7 +115,10 @@ describe('company-decision-wait', () => {
 
       const updated = registerDecisionAnswerKey(wait, 'msg-abc-123');
 
-      expect(updated.consumed_answer_keys).toContain('msg-abc-123');
+      expect(updated).not.toBe(false);
+      if (updated !== false) {
+        expect(updated.consumed_answer_keys).toContain('msg-abc-123');
+      }
     });
 
     it('rejects duplicate answer-key registration and returns false on second attempt', () => {
