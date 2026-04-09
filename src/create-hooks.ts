@@ -42,6 +42,7 @@ export function createHooks(params: {
 }): HookRegistry {
   const { pluginConfig, delegationState, workspaceState } = params;
   const registry = createHookRegistry();
+  const isCompanyMode = (pluginConfig.agent_surface?.mode ?? 'company') === 'company';
 
   // --- 2D: Core infrastructure hooks ---
   registry.register(createToolOutputTruncator());
@@ -97,13 +98,19 @@ export function createHooks(params: {
   }
 
   // --- Phase 5: Session continuity hooks ---
-  registry.register(createBoulderHook({ workspaceState, delegationState }));
-  registry.register(createProgressHook({ workspaceState }));
-  registry.register(createRecoveryHook({ workspaceState, delegationState }));
+  registry.register(
+    createBoulderHook({ workspaceState, delegationState, companyMode: isCompanyMode })
+  );
+  registry.register(createProgressHook({ workspaceState, companyMode: isCompanyMode }));
+  registry.register(
+    createRecoveryHook({ workspaceState, delegationState, companyMode: isCompanyMode })
+  );
 
   // --- Phase 6: Quality scorecard hooks ---
   registry.register(createScorecardHook({ workspaceState, analytics: params.managers.analytics }));
-  registry.register(createDelegationContextHook({ workspaceState, delegationState }));
+  registry.register(
+    createDelegationContextHook({ workspaceState, delegationState, companyMode: isCompanyMode })
+  );
   registry.register(createSprintLogHook({ analytics: params.managers.analytics, delegationState }));
 
   // --- Phase 7: Data pipeline hooks ---

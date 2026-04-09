@@ -6,8 +6,9 @@ import { log } from '../../shared/logger.ts';
 export function createRecoveryHook(params: {
   workspaceState: ReturnType<typeof createWorkspaceState>;
   delegationState: DelegationStateManager;
+  companyMode?: boolean;
 }): HookDefinition {
-  const { workspaceState, delegationState } = params;
+  const { workspaceState, delegationState, companyMode = false } = params;
 
   return {
     name: 'session-recovery',
@@ -31,18 +32,34 @@ export function createRecoveryHook(params: {
         const pct =
           progress.total > 0 ? Math.round((progress.completed / progress.total) * 100) : 0;
 
-        const recoveryContext = [
-          '## Session Recovery',
-          '',
-          `A previous session was working on plan: **${company.plan_name}**`,
-          `Progress: ${progress.completed}/${progress.total} tasks (${pct}%)`,
-          company.current_phase ? `Last phase: ${company.current_phase}` : '',
-          company.active_specialist ? `Last agent: ${company.active_specialist}` : '',
-          '',
-          'Use the sprint-status tool to see full state, or continue where the previous session left off.',
-        ]
-          .filter(Boolean)
-          .join('\n');
+        const recoveryContext = companyMode
+          ? [
+              '## Session Recovery',
+              '',
+              `**Goal:** ${company.visible_context?.current_goal ?? company.plan_name}`,
+              `**Current step:** ${company.visible_context?.current_step ?? company.current_phase ?? 'unknown'}`,
+              `**Status:** ${company.visible_context?.status_summary ?? `Progress ${progress.completed}/${progress.total} tasks (${pct}%)`}`,
+              company.execution_context?.retry_safe === true
+                ? '**Next safe step:** Resume from the last safe checkpoint when you are ready.'
+                : '',
+              company.execution_context?.trace_visibility === 'debug'
+                ? `## Company Debug Trace\n\nWorkflow: ${company.workflow_id ?? 'unknown'}\nCheckpoint: ${company.last_checkpoint_id ?? 'unknown'}\nDecision cause: ${company.visible_context?.pending_user_decision ?? 'No pending decision'}\nNext safe step: ${company.execution_context?.retry_safe === true ? 'Resume from the last safe checkpoint.' : 'Clarify the next Company decision before continuing.'}`
+                : '',
+            ]
+              .filter(Boolean)
+              .join('\n')
+          : [
+              '## Session Recovery',
+              '',
+              `A previous session was working on plan: **${company.plan_name}**`,
+              `Progress: ${progress.completed}/${progress.total} tasks (${pct}%)`,
+              company.current_phase ? `Last phase: ${company.current_phase}` : '',
+              company.active_specialist ? `Last agent: ${company.active_specialist}` : '',
+              '',
+              'Use the sprint-status tool to see full state, or continue where the previous session left off.',
+            ]
+              .filter(Boolean)
+              .join('\n');
 
         safeOutput.system.push(recoveryContext);
       } catch (err: unknown) {

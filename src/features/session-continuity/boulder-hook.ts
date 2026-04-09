@@ -6,8 +6,9 @@ import { log } from '../../shared/logger.ts';
 export function createBoulderHook(params: {
   workspaceState: ReturnType<typeof createWorkspaceState>;
   delegationState: DelegationStateManager;
+  companyMode?: boolean;
 }): HookDefinition {
-  const { workspaceState, delegationState } = params;
+  const { workspaceState, delegationState, companyMode = false } = params;
 
   return {
     name: 'boulder-state-tracker',
@@ -39,6 +40,13 @@ export function createBoulderHook(params: {
               ...canonical,
               current_phase: newPhase,
               active_specialist: newSpecialist,
+              visible_context: companyMode
+                ? {
+                    ...canonical.visible_context,
+                    current_step: `Working through the ${newPhase} phase`,
+                    status_summary: `The Company is now handling the ${newPhase} phase.`,
+                  }
+                : canonical.visible_context,
               updated_at: nowIso,
               session_ids: updatedIds,
             });

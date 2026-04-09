@@ -174,6 +174,11 @@ function makeFakeWorkspaceState(opts: FakeWorkspaceStateOpts = {}) {
       readLog: () => [],
       writeCheckpoint: () => true,
       readCheckpoint: () => null,
+      writeDecisionWait: () => true,
+      resolveDecisionWait: () => true,
+      archiveDecisionWait: () => true,
+      registerSafeRetryCheckpoint: () => true,
+      recordRetryAttempt: () => true,
     },
     startedSessions,
   };
