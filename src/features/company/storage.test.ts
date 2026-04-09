@@ -5,7 +5,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   appendCompanyLogEntry,
   archiveDecisionWaitInState,
+  getLatestSafeCheckpointId,
+  markDecisionWaitStaleInState,
   recordRetryAttemptInState,
+  registerDecisionAnswerInState,
   registerSafeRetryCheckpoint,
   readCompanyCheckpoint,
   readCompanyLogEntries,
@@ -354,6 +357,197 @@ describe('company/storage', () => {
       );
 
       const result = readCompanyCheckpoint(dir, 'bad');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('markDecisionWaitStaleInState', () => {
+    it('marks the active wait as stale without deleting audit history', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      const wait = createDecisionWait({
+        workflowId: 'workflow-1',
+        checkpointId: 'checkpoint-1',
+        question: 'Approve?',
+        phase: 'build',
+      });
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({ workflow_id: 'workflow-1', pending_decision_wait: wait })
+      );
+
+      const result = markDecisionWaitStaleInState(dir, wait.id, 'superseded', 'checkpoint-2');
+      expect(result).toBe(true);
+
+      const updated = readCompanyState(dir);
+      expect(updated?.pending_decision_wait?.status).toBe('stale');
+      expect(updated?.pending_decision_wait?.stale_reason).toBe('superseded');
+      expect(updated?.pending_decision_wait?.superseded_by_checkpoint_id).toBe('checkpoint-2');
+      expect(updated?.pending_decision_wait?.id).toBe(wait.id);
+    });
+
+    it('leaves archived waits intact and does not invent a new workflow id', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      const archivedWait = createDecisionWait({
+        workflowId: 'workflow-1',
+        checkpointId: 'checkpoint-0',
+        question: 'Old question?',
+        phase: 'build',
+      });
+
+      const activeWait = createDecisionWait({
+        workflowId: 'workflow-1',
+        checkpointId: 'checkpoint-1',
+        question: 'Current question?',
+        phase: 'build',
+      });
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({
+          workflow_id: 'workflow-1',
+          pending_decision_wait: activeWait,
+          archived_decision_waits: [{ ...archivedWait, status: 'archived' }],
+        })
+      );
+
+      markDecisionWaitStaleInState(dir, activeWait.id, 'workflow-mismatch');
+
+      const updated = readCompanyState(dir);
+      expect(updated?.workflow_id).toBe('workflow-1');
+      expect(updated?.archived_decision_waits).toHaveLength(1);
+      expect(updated?.archived_decision_waits?.[0]?.id).toBe(archivedWait.id);
+    });
+
+    it('returns false when no matching pending wait exists', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      writeCompanyState(dir, makeCanonicalState({ workflow_id: 'workflow-1' }));
+
+      const result = markDecisionWaitStaleInState(dir, 'nonexistent-id', 'superseded');
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('registerDecisionAnswerInState', () => {
+    it('persists a decision-answer key exactly once and returns recorded', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      const wait = createDecisionWait({
+        workflowId: 'workflow-1',
+        checkpointId: 'checkpoint-1',
+        question: 'Approve?',
+        phase: 'build',
+      });
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({ workflow_id: 'workflow-1', pending_decision_wait: wait })
+      );
+
+      const result = registerDecisionAnswerInState(dir, wait.id, 'msg-key-001');
+      expect(result).toBe('recorded');
+
+      const updated = readCompanyState(dir);
+      expect(updated?.pending_decision_wait?.consumed_answer_keys).toContain('msg-key-001');
+    });
+
+    it('returns duplicate when the same answer key is already stored', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      const wait = createDecisionWait({
+        workflowId: 'workflow-1',
+        checkpointId: 'checkpoint-1',
+        question: 'Approve?',
+        phase: 'build',
+      });
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({ workflow_id: 'workflow-1', pending_decision_wait: wait })
+      );
+
+      registerDecisionAnswerInState(dir, wait.id, 'msg-key-001');
+      const second = registerDecisionAnswerInState(dir, wait.id, 'msg-key-001');
+      expect(second).toBe('duplicate');
+    });
+
+    it('returns missing when no pending wait matches the waitId', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      writeCompanyState(dir, makeCanonicalState({ workflow_id: 'workflow-1' }));
+
+      const result = registerDecisionAnswerInState(dir, 'nonexistent-id', 'msg-key-001');
+      expect(result).toBe('missing');
+    });
+  });
+
+  describe('getLatestSafeCheckpointId', () => {
+    it('returns the last entry in retry_lineage.safe_retry_checkpoint_ids when present', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({
+          workflow_id: 'workflow-1',
+          last_checkpoint_id: 'fallback-checkpoint',
+          retry_lineage: {
+            current_attempt: 1,
+            child_attempt_ids: [],
+            safe_retry_checkpoint_ids: ['cp-early', 'cp-latest'],
+          },
+        })
+      );
+
+      const result = getLatestSafeCheckpointId(dir);
+      expect(result).toBe('cp-latest');
+    });
+
+    it('falls back to last_checkpoint_id when no retry-safe checkpoints are registered', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      writeCompanyState(
+        dir,
+        makeCanonicalState({
+          workflow_id: 'workflow-1',
+          last_checkpoint_id: 'fallback-checkpoint',
+          retry_lineage: {
+            current_attempt: 1,
+            child_attempt_ids: [],
+            safe_retry_checkpoint_ids: [],
+          },
+        })
+      );
+
+      const result = getLatestSafeCheckpointId(dir);
+      expect(result).toBe('fallback-checkpoint');
+    });
+
+    it('returns null when state has no checkpoint information at all', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      writeCompanyState(dir, makeCanonicalState());
+
+      const result = getLatestSafeCheckpointId(dir);
+      expect(result).toBeNull();
+    });
+
+    it('returns null when no state file exists', () => {
+      const dir = makeTempDir();
+      tempDirs.push(dir);
+
+      const result = getLatestSafeCheckpointId(dir);
       expect(result).toBeNull();
     });
   });
