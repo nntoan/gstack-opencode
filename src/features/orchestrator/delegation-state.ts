@@ -13,6 +13,8 @@ export interface PendingCompanyContext {
   alternativePhases?: SprintPhase[];
   requestText: string;
   deferredIntent: ClassifiedIntent;
+  source?: 'gate' | 'plugin-interface';
+  approvalAction?: 'continue-same-workflow';
 }
 
 export class DelegationStateManager {

@@ -66,6 +66,9 @@ export function createHooks(params: {
     createGateHook({
       gateEngine,
       getCurrentPhase,
+      workspaceState,
+      delegationState,
+      companyMode: isCompanyMode,
       getSessionMetadata: (_sessionId: string) => {
         const company = workspaceState.company.readResolved();
         if (company) {
