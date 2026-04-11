@@ -659,6 +659,105 @@ describe('createRecoveryHook', () => {
     expect(output.system).toHaveLength(1);
     expect(output.system[0]).toContain('Boulder Plan');
   });
+
+  it('projects canonical resume guidance in Company voice without leaking checkpoint ids in normal mode', async () => {
+    const ws = makeFakeWorkspaceState({
+      companyState: makeCanonicalCompanyState({
+        active_plan: '/path/canonical.md',
+        plan_name: 'Canonical Sprint',
+        last_checkpoint_id: 'cp-safe-1',
+        visible_context: {
+          current_goal: 'Resume the release workflow',
+          current_step: 'Waiting for a safe resume decision',
+          status_summary: 'The Company preserved the workflow after the pause.',
+        },
+        execution_context: {
+          retry_safe: true,
+          trace_visibility: 'hidden',
+        },
+        retry_lineage: {
+          current_attempt: 2,
+          child_attempt_ids: ['wf-1:attempt:2'],
+          safe_retry_checkpoint_ids: ['cp-safe-1'],
+        },
+        active_specialist: 'release-engineer',
+      }),
+      boulderState: null,
+      progress: { total: 4, completed: 1, isComplete: false },
+    });
+    const hook = createRecoveryHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+      companyMode: true,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({ sessionID: 'new-sess' }, output);
+
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('**Goal:** Resume the release workflow');
+    expect(output.system[0]).toContain('**Current step:** Waiting for a safe resume decision');
+    expect(output.system[0]).toContain('**Recommendation:**');
+    expect(output.system[0]).toContain('**Consequence:**');
+    expect(output.system[0]).toContain('**Next safe step:**');
+    expect(output.system[0]).not.toContain('cp-safe-1');
+    expect(output.system[0]).not.toContain('release-engineer');
+  });
+
+  it('projects stale-answer recovery guidance in Company voice without leaking checkpoint ids in normal mode', async () => {
+    const ws = makeFakeWorkspaceState({
+      companyState: makeCanonicalCompanyState({
+        active_plan: '/path/canonical.md',
+        last_checkpoint_id: 'cp-safe-9',
+        visible_context: {
+          current_goal: 'Finish the interrupted workflow',
+          current_step: 'A previous answer no longer matches the saved state',
+          status_summary: 'The Company ignored the stale answer.',
+        },
+        execution_context: {
+          retry_safe: true,
+          trace_visibility: 'hidden',
+        },
+        retry_lineage: {
+          current_attempt: 2,
+          child_attempt_ids: [],
+          safe_retry_checkpoint_ids: ['cp-safe-9'],
+        },
+        pending_decision_wait: {
+          id: 'wait-stale-1',
+          workflow_id: 'wf-stale-1',
+          checkpoint_id: 'cp-old-1',
+          question: 'Resume the earlier route?',
+          phase: 'build',
+          status: 'stale',
+          kind: 'approval',
+          resolution_action: 'offer-resume',
+          stale_reason: 'checkpoint-mismatch',
+          superseded_by_checkpoint_id: 'cp-safe-9',
+          created_at: '2026-04-09T00:00:00.000Z',
+        },
+      }),
+      boulderState: null,
+      progress: { total: 4, completed: 1, isComplete: false },
+    });
+    const hook = createRecoveryHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState:
+        makeFakeDelegationState() as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+      companyMode: true,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({ sessionID: 'new-sess' }, output);
+
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('That answer is stale');
+    expect(output.system[0]).toContain('fresh confirmed direction');
+    expect(output.system[0]).not.toContain('cp-safe-9');
+  });
 });
 
 describe('createProgressHook — canonical state', () => {
@@ -711,6 +810,50 @@ describe('createProgressHook — canonical state', () => {
     expect(output.system).toHaveLength(1);
     expect(output.system[0]).toContain('Boulder Progress Plan');
     expect(output.system[0]).toContain('1/5');
+  });
+
+  it('uses canonical latest-safe-step wording in Company mode without leaking runtime internals', async () => {
+    const ws = makeFakeWorkspaceState({
+      companyState: makeCanonicalCompanyState({
+        active_plan: '/path/canonical.md',
+        plan_name: 'Canonical Progress Plan',
+        current_phase: 'build',
+        active_specialist: 'builder',
+        last_checkpoint_id: 'cp-safe-22',
+        visible_context: {
+          current_goal: 'Finish the active plan',
+          current_step: 'Waiting for a safe continuation',
+          status_summary: 'The Company preserved the current path.',
+        },
+        execution_context: {
+          retry_safe: true,
+          trace_visibility: 'hidden',
+        },
+        retry_lineage: {
+          current_attempt: 3,
+          child_attempt_ids: ['wf-2:attempt:2'],
+          safe_retry_checkpoint_ids: ['cp-safe-22'],
+        },
+      }),
+      boulderState: null,
+      progress: { total: 6, completed: 3, isComplete: false },
+    });
+    const hook = createProgressHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      companyMode: true,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({}, output);
+
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('## Company Progress');
+    expect(output.system[0]).toContain('**Plan:** Canonical Progress Plan');
+    expect(output.system[0]).toContain('**Next safe step:**');
+    expect(output.system[0]).not.toContain('cp-safe-22');
+    expect(output.system[0]).not.toContain('wf-2:attempt:2');
+    expect(output.system[0]).not.toContain('builder');
   });
 });
 
@@ -856,5 +999,99 @@ describe('createDelegationContextHook — canonical state', () => {
     await hook.handler({ sessionID: 'sess-1' }, output);
     expect(output.system).toHaveLength(1);
     expect(output.system[0]).toContain('Boulder Context Plan');
+  });
+
+  it('uses Company continuity wording without leaking specialist identity or checkpoint ids in normal mode', async () => {
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('build'));
+    const ws = makeFakeWorkspaceState({
+      companyState: makeCanonicalCompanyState({
+        active_plan: '/path/canonical.md',
+        plan_name: 'Canonical Context Plan',
+        current_phase: 'build',
+        active_specialist: 'builder',
+        last_checkpoint_id: 'cp-safe-31',
+        visible_context: {
+          current_goal: 'Continue the active Company workflow',
+          current_step: 'Paused after checkpoint creation',
+          status_summary: 'The Company preserved a safe continuation path.',
+        },
+        execution_context: {
+          retry_safe: true,
+          trace_visibility: 'hidden',
+        },
+        retry_lineage: {
+          current_attempt: 2,
+          child_attempt_ids: ['wf-3:attempt:2'],
+          safe_retry_checkpoint_ids: ['cp-safe-31'],
+        },
+      }),
+      boulderState: null,
+      progress: { total: 5, completed: 2, isComplete: false },
+    });
+    const hook = createDelegationContextHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState({
+        delegations,
+      }) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+      companyMode: true,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({ sessionID: 'sess-1' }, output);
+
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('The next safe step:');
+    expect(output.system[0]).toContain('**Goal:** Continue the active Company workflow');
+    expect(output.system[0]).toContain('**Current step:** Paused after checkpoint creation');
+    expect(output.system[0]).not.toContain('cp-safe-31');
+    expect(output.system[0]).not.toContain('builder');
+  });
+
+  it('keeps Company debug trace behind explicit debug visibility', async () => {
+    const delegations = new Map<string, DelegationResult>();
+    delegations.set('sess-1', makeDelegation('build'));
+    const ws = makeFakeWorkspaceState({
+      companyState: makeCanonicalCompanyState({
+        active_plan: '/path/canonical.md',
+        plan_name: 'Canonical Context Plan',
+        current_phase: 'build',
+        last_checkpoint_id: 'cp-debug-1',
+        workflow_id: 'wf-debug-1',
+        visible_context: {
+          current_goal: 'Continue the active Company workflow',
+          current_step: 'Paused after checkpoint creation',
+          status_summary: 'The Company preserved a safe continuation path.',
+        },
+        execution_context: {
+          retry_safe: true,
+          trace_visibility: 'debug',
+        },
+        retry_lineage: {
+          current_attempt: 2,
+          child_attempt_ids: ['wf-debug-1:attempt:2'],
+          safe_retry_checkpoint_ids: ['cp-debug-1'],
+        },
+      }),
+      boulderState: null,
+      progress: { total: 5, completed: 2, isComplete: false },
+    });
+    const hook = createDelegationContextHook({
+      workspaceState: ws as ReturnType<
+        typeof import('../workspace-state/index.ts').createWorkspaceState
+      >,
+      delegationState: makeFakeDelegationState({
+        delegations,
+      }) as unknown as import('../orchestrator/index.ts').DelegationStateManager,
+      companyMode: true,
+    });
+    const output = { system: [] as string[] };
+    await hook.handler({ sessionID: 'sess-1' }, output);
+
+    expect(output.system).toHaveLength(1);
+    expect(output.system[0]).toContain('## Company Debug Trace');
+    expect(output.system[0]).toContain('Workflow: wf-debug-1');
+    expect(output.system[0]).toContain('Checkpoint: cp-debug-1');
   });
 });

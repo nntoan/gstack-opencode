@@ -1,7 +1,31 @@
 import type { HookDefinition } from '../../types/hooks.ts';
 import type { createWorkspaceState } from '../workspace-state/index.ts';
 import type { DelegationStateManager } from '../orchestrator/index.ts';
+import { deriveCompanyResumeOffer, deriveStaleAnswerRecovery } from '../company/company-resume.ts';
+import type { CompanyState } from '../company/types.ts';
 import { log } from '../../shared/logger.ts';
+
+function deriveContinuityOffer(
+  workspaceState: ReturnType<typeof createWorkspaceState>,
+  company: CompanyState
+) {
+  const latestSafeCheckpointId =
+    company.retry_lineage?.safe_retry_checkpoint_ids.at(-1) ?? company.last_checkpoint_id;
+  const staleWait =
+    company.pending_decision_wait?.status === 'stale' ? company.pending_decision_wait : null;
+  const checkpointId = staleWait?.superseded_by_checkpoint_id ?? latestSafeCheckpointId;
+  const checkpoint = checkpointId ? workspaceState.company.readCheckpoint(checkpointId) : null;
+
+  if (staleWait) {
+    return deriveStaleAnswerRecovery(company, staleWait, checkpoint);
+  }
+
+  if (company.execution_context?.retry_safe === true || checkpointId) {
+    return deriveCompanyResumeOffer(company, checkpoint);
+  }
+
+  return null;
+}
 
 export function createDelegationContextHook(params: {
   workspaceState: ReturnType<typeof createWorkspaceState>;
@@ -52,7 +76,15 @@ export function createDelegationContextHook(params: {
         const company = workspaceState.company.readResolved();
         if (company?.active_plan) {
           const progress = workspaceState.plans.getProgress(company.active_plan);
-          if (!progress.isComplete && progress.total > 0) {
+          const continuityOffer = companyMode
+            ? deriveContinuityOffer(workspaceState, company)
+            : null;
+
+          if (companyMode && continuityOffer) {
+            hints.push(
+              `**Goal:** ${continuityOffer.goal}\n**Current step:** ${continuityOffer.currentStep}\nThe next safe step: ${continuityOffer.nextSafeStep}`
+            );
+          } else if (!progress.isComplete && progress.total > 0) {
             hints.push(
               companyMode
                 ? `The current Company workflow still has unfinished plan tasks (${progress.completed}/${progress.total}). Focus on finishing that work before starting something new.`

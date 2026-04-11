@@ -1,6 +1,30 @@
 import type { HookDefinition } from '../../types/hooks.ts';
 import type { createWorkspaceState } from '../workspace-state/index.ts';
+import { deriveCompanyResumeOffer, deriveStaleAnswerRecovery } from '../company/company-resume.ts';
+import type { CompanyState } from '../company/types.ts';
 import { log } from '../../shared/logger.ts';
+
+function deriveContinuityOffer(
+  workspaceState: ReturnType<typeof createWorkspaceState>,
+  company: CompanyState
+) {
+  const latestSafeCheckpointId =
+    company.retry_lineage?.safe_retry_checkpoint_ids.at(-1) ?? company.last_checkpoint_id;
+  const staleWait =
+    company.pending_decision_wait?.status === 'stale' ? company.pending_decision_wait : null;
+  const checkpointId = staleWait?.superseded_by_checkpoint_id ?? latestSafeCheckpointId;
+  const checkpoint = checkpointId ? workspaceState.company.readCheckpoint(checkpointId) : null;
+
+  if (staleWait) {
+    return deriveStaleAnswerRecovery(company, staleWait, checkpoint);
+  }
+
+  if (company.execution_context?.retry_safe === true || checkpointId) {
+    return deriveCompanyResumeOffer(company, checkpoint);
+  }
+
+  return null;
+}
 
 export function createProgressHook(params: {
   workspaceState: ReturnType<typeof createWorkspaceState>;
@@ -23,15 +47,14 @@ export function createProgressHook(params: {
         if (progress.total === 0) return;
 
         const pct = Math.round((progress.completed / progress.total) * 100);
+        const continuityOffer = companyMode ? deriveContinuityOffer(workspaceState, company) : null;
         const progressLine = companyMode
           ? [
               '## Company Progress',
               `**Plan:** ${company.plan_name}`,
               `**Status:** ${company.visible_context?.status_summary ?? (progress.isComplete ? `Complete (${progress.completed}/${progress.total} tasks)` : `${progress.completed}/${progress.total} tasks complete (${pct}%)`)}`,
               `**Current step:** ${company.visible_context?.current_step ?? company.current_phase ?? 'unknown'}`,
-              company.execution_context?.retry_safe === true
-                ? '**Next safe step:** Resume from the latest safe checkpoint if needed.'
-                : '',
+              continuityOffer ? `**Next safe step:** ${continuityOffer.nextSafeStep}` : '',
               company.execution_context?.trace_visibility === 'debug'
                 ? `## Company Debug Trace\n\nWorkflow: ${company.workflow_id ?? 'unknown'}\nCheckpoint: ${company.last_checkpoint_id ?? 'unknown'}\nDecision cause: ${company.visible_context?.pending_user_decision ?? 'No pending decision'}\nNext safe step: ${company.execution_context?.retry_safe === true ? 'Resume from the last safe checkpoint.' : 'Clarify the next Company decision before continuing.'}`
                 : '',
