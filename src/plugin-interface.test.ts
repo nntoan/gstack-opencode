@@ -1585,3 +1585,535 @@ describe('createPluginInterface — retry replay regression (04-02)', () => {
     expect(state?.visible_context?.status_summary).toContain('stale');
   });
 });
+
+describe('createPluginInterface — canonical resume and gate approval handling (04-04)', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(() => {
+    for (const dir of tempDirs) {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    tempDirs.length = 0;
+  });
+
+  function makeTempDir(): string {
+    const dir = mkdtempSync(join(tmpdir(), 'gstack-pi-resume-test-'));
+    tempDirs.push(dir);
+    return dir;
+  }
+
+  const multiAgentCompanyConfig = GstackConfigSchema.parse({
+    orchestration_mode: 'multi-agent',
+    agent_surface: { mode: 'company' },
+  }) as GstackConfig;
+
+  const makeClassifiedIntent = (
+    overrides: Partial<ReturnType<Orchestrator['classify']>> = {}
+  ): ReturnType<Orchestrator['classify']> => ({
+    phase: 'build',
+    confidence: 0.82,
+    suggestedAgent: 'builder',
+    suggestedSkills: ['implement'],
+    reasoning: 'Resume saved Company workflow',
+    ...overrides,
+  });
+
+  const builderAgent: GstackAgent = {
+    role: 'builder',
+    name: 'builder',
+    description: 'builder agent',
+    sprintPhase: 'build',
+    skills: [],
+    instructions: 'Build things.',
+  };
+
+  const implementSkill: BuiltinSkill = {
+    name: 'implement',
+    description: 'implement skill',
+    template: '',
+  };
+
+  const mockHookRegistry: HookRegistry = {
+    register: () => {},
+    dispatch: async () => {},
+    getHandlerCount: () => 0,
+  };
+
+  const makeCompanyState = (overrides: Partial<CompanyState> = {}): CompanyState => ({
+    version: 1,
+    visible_agent: 'company',
+    source: 'canonical',
+    started_at: '2026-04-09T00:00:00.000Z',
+    updated_at: '2026-04-09T00:00:00.000Z',
+    session_ids: ['sess-resume'],
+    workflow_id: 'wf-resume-1',
+    current_attempt: 1,
+    current_phase: 'build',
+    visible_context: {
+      current_goal: 'Implement the saved build task',
+      current_step: 'Paused at a safe checkpoint',
+      status_summary: 'The Company preserved the workflow before pause.',
+      deferred_request_text: 'Implement the saved build task',
+    },
+    execution_context: {
+      specialist_role: 'builder',
+      classified_phase: 'build',
+      confidence: 0.82,
+      trace_visibility: 'hidden',
+      retry_safe: true,
+      deferred_classified_intent: {
+        phase: 'build',
+        confidence: 0.82,
+        suggested_agent: 'builder',
+        suggested_skills: ['implement'],
+        reasoning: 'Resume saved Company workflow',
+      },
+    },
+    retry_lineage: {
+      parent_workflow_id: 'wf-resume-1',
+      current_attempt: 1,
+      child_attempt_ids: [],
+      safe_retry_checkpoint_ids: ['cp-safe-1'],
+    },
+    ownership: COMPANY_ARTIFACT_OWNERSHIP,
+    ...overrides,
+  });
+
+  function createStatefulManagers(
+    options?: { companyState?: CompanyState | null },
+    directory?: string
+  ): Managers {
+    let companyState = options?.companyState ?? null;
+    const checkpoints: CompanyCheckpoint[] = [];
+
+    return {
+      configHandler: async (): Promise<void> => {},
+      skillMcpManager: {
+        disconnectSession: async (): Promise<void> => {},
+        disconnectAll: async (): Promise<void> => {},
+      } as unknown as Managers['skillMcpManager'],
+      sprintBacklog: {} as unknown as Managers['sprintBacklog'],
+      mcpInvoker: new DeferredMcpInvoker(),
+      workspaceState: {
+        boulder: {
+          read: () => null,
+          write: () => true,
+          append: () => null,
+          clear: () => false,
+          upsert: () => null,
+        },
+        plans: {} as unknown as Managers['workspaceState']['plans'],
+        sessions: {
+          start: async () => null as unknown,
+          complete: async () => null,
+          getActive: async () => [],
+          cleanup: async () => 0,
+        } as unknown as Managers['workspaceState']['sessions'],
+        reviews: {} as unknown as Managers['workspaceState']['reviews'],
+        notepads: () => ({}) as unknown as ReturnType<Managers['workspaceState']['notepads']>,
+        ensureDir: () => {},
+        company: {
+          read: () => companyState,
+          readResolved: () => companyState,
+          write: (state: CompanyState) => {
+            companyState = state;
+            if (directory) {
+              writeCompanyState(directory, state);
+            }
+            return true;
+          },
+          appendLog: () => {},
+          readLog: () => [],
+          writeCheckpoint: (checkpoint: CompanyCheckpoint) => {
+            checkpoints.push(checkpoint);
+            return true;
+          },
+          readCheckpoint: (checkpointId: string) =>
+            checkpoints.find((checkpoint) => checkpoint.id === checkpointId) ?? null,
+          writeDecisionWait: (wait) => {
+            if (!companyState) return false;
+            companyState = { ...companyState, pending_decision_wait: wait };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+          resolveDecisionWait: (waitId: string, answer: string) => {
+            if (
+              !companyState?.pending_decision_wait ||
+              companyState.pending_decision_wait.id !== waitId
+            ) {
+              return false;
+            }
+            companyState = {
+              ...companyState,
+              pending_decision_wait: {
+                ...companyState.pending_decision_wait,
+                status: 'answered',
+                answer,
+                answered_at: new Date().toISOString(),
+              },
+            };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+          archiveDecisionWait: (waitId: string) => {
+            if (
+              !companyState?.pending_decision_wait ||
+              companyState.pending_decision_wait.id !== waitId
+            ) {
+              return false;
+            }
+            companyState = {
+              ...companyState,
+              pending_decision_wait: undefined,
+              archived_decision_waits: [
+                ...(companyState.archived_decision_waits ?? []),
+                { ...companyState.pending_decision_wait!, status: 'archived' },
+              ],
+            };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+          registerSafeRetryCheckpoint: (checkpointId: string) => {
+            if (!companyState?.retry_lineage) return false;
+            companyState = {
+              ...companyState,
+              retry_lineage: {
+                ...companyState.retry_lineage,
+                safe_retry_checkpoint_ids:
+                  companyState.retry_lineage.safe_retry_checkpoint_ids.includes(checkpointId)
+                    ? companyState.retry_lineage.safe_retry_checkpoint_ids
+                    : [...companyState.retry_lineage.safe_retry_checkpoint_ids, checkpointId],
+              },
+            };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+          recordRetryAttempt: (checkpointId: string) => {
+            if (!companyState?.retry_lineage) return false;
+            if (!companyState.retry_lineage.safe_retry_checkpoint_ids.includes(checkpointId)) {
+              return false;
+            }
+            const nextAttempt = companyState.retry_lineage.current_attempt + 1;
+            companyState = {
+              ...companyState,
+              current_attempt: nextAttempt,
+              retry_lineage: {
+                ...companyState.retry_lineage,
+                current_attempt: nextAttempt,
+                child_attempt_ids: [
+                  ...companyState.retry_lineage.child_attempt_ids,
+                  `${companyState.workflow_id}:attempt:${nextAttempt}`,
+                ],
+                last_retry_checkpoint_id: checkpointId,
+              },
+            };
+            if (directory) {
+              writeCompanyState(directory, companyState);
+            }
+            return true;
+          },
+        },
+      },
+      analytics: {} as unknown as Managers['analytics'],
+    };
+  }
+
+  it('fresh-session resume produces a Company resume offer instead of fresh classification', async () => {
+    const dir = makeTempDir();
+    const checkpointState = makeCompanyState({
+      last_checkpoint_id: 'cp-safe-1',
+      retry_lineage: {
+        parent_workflow_id: 'wf-resume-1',
+        current_attempt: 1,
+        child_attempt_ids: [],
+        safe_retry_checkpoint_ids: ['cp-safe-1'],
+      },
+    });
+    const initialState = makeCompanyState({
+      last_checkpoint_id: 'cp-safe-1',
+      pending_decision_wait: undefined,
+    });
+    writeCompanyState(dir, initialState);
+
+    const statefulManagers = createStatefulManagers({ companyState: initialState }, dir);
+    statefulManagers.workspaceState.company.writeCheckpoint?.({
+      id: 'cp-safe-1',
+      captured_at: '2026-04-09T00:05:00.000Z',
+      state: checkpointState,
+      reason: 'session.deleted',
+    });
+
+    let classifyCalls = 0;
+    let delegateCalls = 0;
+    const orchestrator: Orchestrator = {
+      classify: () => {
+        classifyCalls += 1;
+        return makeClassifiedIntent();
+      },
+      delegate: () => {
+        delegateCalls += 1;
+        return null;
+      },
+    };
+    const delegationState = new DelegationStateManager();
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-resume' },
+      { message: null, parts: [{ type: 'text', text: 'resume' }] }
+    );
+
+    expect(classifyCalls).toBe(0);
+    expect(delegateCalls).toBe(0);
+    const pending = delegationState.getPendingContext('sess-resume');
+    expect(pending?.source).toBe('resume');
+    expect(pending?.approvalAction).toBe('offer-resume');
+    expect(statefulManagers.workspaceState.company.read()?.pending_decision_wait?.kind).toBe(
+      'resume'
+    );
+  });
+
+  it('accepting a resume offer resumes the same workflow using deferred intent and latest safe checkpoint', async () => {
+    const dir = makeTempDir();
+    const resumeWait = createDecisionWait({
+      workflowId: 'wf-resume-1',
+      checkpointId: 'cp-safe-1',
+      question: 'Resume the saved workflow?',
+      phase: 'build',
+      kind: 'resume',
+      resolution_action: 'offer-resume',
+    });
+    const checkpointState = makeCompanyState({
+      last_checkpoint_id: 'cp-safe-1',
+      pending_decision_wait: undefined,
+      visible_context: {
+        current_goal: 'Implement the saved build task',
+        current_step: 'Ready to resume build execution',
+        status_summary: 'Paused at safe checkpoint',
+        deferred_request_text: 'Implement the saved build task',
+      },
+    });
+    const initialState = makeCompanyState({
+      last_checkpoint_id: 'cp-safe-1',
+      pending_decision_wait: resumeWait,
+    });
+    writeCompanyState(dir, initialState);
+
+    const statefulManagers = createStatefulManagers({ companyState: initialState }, dir);
+    statefulManagers.workspaceState.company.writeCheckpoint?.({
+      id: 'cp-safe-1',
+      captured_at: '2026-04-09T00:05:00.000Z',
+      state: checkpointState,
+      reason: 'session.deleted',
+    });
+
+    let delegateCalls = 0;
+    const orchestrationResult = {
+      agent: builderAgent,
+      skills: [implementSkill],
+      phase: 'build' as const,
+      reasoning: 'Delegated resumed build work',
+    };
+    const orchestrator: Orchestrator = {
+      classify: () => makeClassifiedIntent(),
+      delegate: () => {
+        delegateCalls += 1;
+        return orchestrationResult;
+      },
+    };
+    const delegationState = new DelegationStateManager();
+    delegationState.setPendingContext('sess-resume', {
+      prompt: 'Resume the saved workflow?',
+      kind: 'approval',
+      phase: 'build',
+      workflowId: 'wf-resume-1',
+      checkpointId: 'cp-safe-1',
+      pendingWaitId: resumeWait.id,
+      requestText: 'Implement the saved build task',
+      deferredIntent: makeClassifiedIntent(),
+      source: 'resume',
+      approvalAction: 'offer-resume',
+    });
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-resume' },
+      { message: null, parts: [{ type: 'text', text: 'yes' }] }
+    );
+
+    expect(delegateCalls).toBe(1);
+    expect(delegationState.getPendingContext('sess-resume')).toBeNull();
+    expect(delegationState.getDelegation('sess-resume')?.phase).toBe('build');
+    expect(
+      statefulManagers.workspaceState.company.read()?.visible_context?.status_summary
+    ).toContain('build phase');
+  });
+
+  it('accepting a gate approval clears the wait and continues without duplicate delegation work', async () => {
+    const dir = makeTempDir();
+    const gateWait = createDecisionWait({
+      workflowId: 'wf-resume-1',
+      checkpointId: 'cp-gate-1',
+      question: 'Approve the gate recommendation?',
+      phase: 'review',
+      kind: 'approval',
+      resolution_action: 'continue-same-workflow',
+    });
+    const initialState = makeCompanyState({
+      last_checkpoint_id: 'cp-gate-1',
+      pending_decision_wait: gateWait,
+    });
+    writeCompanyState(dir, initialState);
+
+    const statefulManagers = createStatefulManagers({ companyState: initialState }, dir);
+
+    let delegateCalls = 0;
+    const orchestrator: Orchestrator = {
+      classify: () => makeClassifiedIntent(),
+      delegate: () => {
+        delegateCalls += 1;
+        return null;
+      },
+    };
+    const delegationState = new DelegationStateManager();
+    delegationState.setPendingContext('sess-resume', {
+      prompt: 'Approve the gate recommendation?',
+      kind: 'approval',
+      phase: 'review',
+      workflowId: 'wf-resume-1',
+      checkpointId: 'cp-gate-1',
+      pendingWaitId: gateWait.id,
+      requestText: 'Implement the saved build task',
+      deferredIntent: makeClassifiedIntent({ phase: 'review', suggestedAgent: 'reviewer' }),
+      source: 'gate',
+      approvalAction: 'continue-same-workflow',
+    });
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-resume' },
+      { message: null, parts: [{ type: 'text', text: 'yes' }] }
+    );
+
+    expect(delegateCalls).toBe(0);
+    expect(delegationState.getPendingContext('sess-resume')).toBeNull();
+    expect(statefulManagers.workspaceState.company.read()?.pending_decision_wait).toBeUndefined();
+    expect(
+      statefulManagers.workspaceState.company.read()?.visible_context?.status_summary
+    ).toContain('continued the same workflow');
+  });
+
+  it('rejecting a resume offer keeps the workflow paused and asks for a fresh confirmed direction', async () => {
+    const dir = makeTempDir();
+    const resumeWait = createDecisionWait({
+      workflowId: 'wf-resume-1',
+      checkpointId: 'cp-safe-1',
+      question: 'Resume the saved workflow?',
+      phase: 'build',
+      kind: 'resume',
+      resolution_action: 'offer-resume',
+    });
+    const initialState = makeCompanyState({
+      last_checkpoint_id: 'cp-safe-1',
+      pending_decision_wait: resumeWait,
+    });
+    writeCompanyState(dir, initialState);
+
+    const statefulManagers = createStatefulManagers({ companyState: initialState }, dir);
+
+    let classifyCalls = 0;
+    let delegateCalls = 0;
+    const orchestrator: Orchestrator = {
+      classify: () => {
+        classifyCalls += 1;
+        return makeClassifiedIntent();
+      },
+      delegate: () => {
+        delegateCalls += 1;
+        return null;
+      },
+    };
+    const delegationState = new DelegationStateManager();
+    delegationState.setPendingContext('sess-resume', {
+      prompt: 'Resume the saved workflow?',
+      kind: 'approval',
+      phase: 'build',
+      workflowId: 'wf-resume-1',
+      checkpointId: 'cp-safe-1',
+      pendingWaitId: resumeWait.id,
+      requestText: 'Implement the saved build task',
+      deferredIntent: makeClassifiedIntent(),
+      source: 'resume',
+      approvalAction: 'offer-resume',
+    });
+
+    const pi = createPluginInterface({
+      ctx: { directory: dir },
+      pluginConfig: multiAgentCompanyConfig,
+      managers: statefulManagers,
+      hooks: mockHookRegistry,
+      tools: {},
+      orchestrator,
+      delegationState,
+      skills: [],
+      agents: [],
+    });
+
+    const chatHandler = pi['chat.message'] as Function;
+    await chatHandler(
+      { sessionID: 'sess-resume' },
+      { message: null, parts: [{ type: 'text', text: 'no' }] }
+    );
+
+    expect(classifyCalls).toBe(0);
+    expect(delegateCalls).toBe(0);
+    expect(delegationState.getPendingContext('sess-resume')).toBeNull();
+    expect(
+      statefulManagers.workspaceState.company.read()?.visible_context?.status_summary
+    ).toContain('fresh direction');
+  });
+});

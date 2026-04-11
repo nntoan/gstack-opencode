@@ -14,9 +14,11 @@ import { createDecisionWait } from './features/company/company-decision-wait.ts'
 import {
   archiveDecisionWaitInState,
   COMPANY_ARTIFACT_OWNERSHIP,
+  deriveCompanyResumeOffer,
+  deriveStaleAnswerRecovery,
   getLatestSafeCheckpointId,
   markDecisionWaitStaleInState,
-  recordRetryAttemptInState,
+  readCompanyState,
   registerDecisionAnswerInState,
   resolveDecisionWaitInState,
 } from './features/company/index.ts';
@@ -107,6 +109,128 @@ function updateCompanyState(
   const next = updater(current);
   managers.workspaceState.company.write(next);
   return next;
+}
+
+function syncCompanyStateFromStorage(managers: Managers, directory: string): CompanyState | null {
+  const canonical = readCompanyState(directory);
+  if (canonical) {
+    managers.workspaceState.company.write(canonical);
+  }
+  return canonical;
+}
+
+function fromDeferredIntent(
+  state: CompanyState,
+  fallbackPhase?: SprintPhase
+): ClassifiedIntent | null {
+  const deferred = state.execution_context?.deferred_classified_intent;
+  if (deferred) {
+    return {
+      phase: deferred.phase,
+      confidence: deferred.confidence,
+      suggestedAgent: deferred.suggested_agent,
+      suggestedSkills: deferred.suggested_skills,
+      reasoning: deferred.reasoning,
+    };
+  }
+
+  const phase = state.execution_context?.classified_phase ?? state.current_phase ?? fallbackPhase;
+  const suggestedAgent = state.active_specialist;
+
+  if (!phase || !suggestedAgent) {
+    return null;
+  }
+
+  return {
+    phase,
+    confidence: state.execution_context?.confidence ?? 1,
+    suggestedAgent: suggestedAgent as ClassifiedIntent['suggestedAgent'],
+    suggestedSkills: [],
+    reasoning: 'Resume saved Company workflow',
+  };
+}
+
+function buildCompanyResumePrompt(input: {
+  goal: string;
+  currentStep: string;
+  recommendation: string;
+  consequence: string;
+  nextSafeStep: string;
+}): string {
+  return [
+    '## Company Decision Required',
+    '',
+    `**Goal:** ${input.goal}`,
+    `**Current step:** ${input.currentStep}`,
+    `**Recommendation:** ${input.recommendation}`,
+    `**Consequence:** ${input.consequence}`,
+    `**Next safe step:** ${input.nextSafeStep}`,
+  ].join('\n');
+}
+
+function createResumePendingDecision(params: {
+  managers: Managers;
+  delegationState: DelegationStateManager;
+  sessionId: string;
+  companyState: CompanyState;
+  classified: ClassifiedIntent;
+  checkpointId?: string;
+  prompt: string;
+  goal: string;
+  currentStep: string;
+  recommendation: string;
+  requestText: string;
+}): void {
+  const checkpointId =
+    params.checkpointId ??
+    params.companyState.last_checkpoint_id ??
+    params.companyState.retry_lineage?.safe_retry_checkpoint_ids.at(-1) ??
+    randomUUID();
+
+  const wait = createDecisionWait({
+    workflowId: params.companyState.workflow_id ?? randomUUID(),
+    checkpointId,
+    question: params.prompt,
+    phase: params.classified.phase,
+    kind: 'resume',
+    resolution_action: 'offer-resume',
+  });
+
+  params.managers.workspaceState.company.writeDecisionWait?.(wait);
+  params.managers.workspaceState.company.write({
+    ...params.companyState,
+    workflow_id: params.companyState.workflow_id ?? wait.workflow_id,
+    session_ids: mergeSessionId(params.companyState.session_ids, params.sessionId),
+    last_checkpoint_id: checkpointId,
+    pending_decision_wait: wait,
+    visible_context: {
+      ...params.companyState.visible_context,
+      current_goal: params.goal,
+      current_step: params.currentStep,
+      status_summary: params.recommendation,
+      pending_user_decision: params.prompt,
+      deferred_request_text:
+        params.companyState.visible_context?.deferred_request_text ?? params.requestText,
+    },
+    execution_context: {
+      ...params.companyState.execution_context,
+      deferred_classified_intent: toDeferredClassifiedIntent(params.classified),
+    },
+    updated_at: new Date().toISOString(),
+  });
+
+  params.delegationState.setPendingContext(params.sessionId, {
+    prompt: params.prompt,
+    kind: 'approval',
+    phase: params.classified.phase,
+    workflowId: params.companyState.workflow_id,
+    checkpointId,
+    pendingWaitId: wait.id,
+    requestText: params.requestText,
+    deferredIntent: params.classified,
+    source: 'resume',
+    approvalAction: 'offer-resume',
+  });
 }
 
 function storePendingCompanyDecision(params: {
@@ -316,6 +440,7 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
             const sessionId = input?.sessionID ?? '';
             if (isCompanyMode(pluginConfig) && sessionId) {
               const pendingContext = delegationState.getPendingContext(sessionId);
+              const activeDelegation = delegationState.getDelegation(sessionId);
               const companyState = managers.workspaceState.company.read();
               const pendingWait = companyState?.pending_decision_wait;
 
@@ -365,15 +490,84 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
                     staleReason,
                     safeCheckpointId
                   );
-                  managers.workspaceState.company.write({
-                    ...companyState!,
-                    visible_context: {
-                      ...companyState!.visible_context,
-                      status_summary: safeCheckpointId
-                        ? `That answer is stale — the workflow has moved on. Resume from the latest safe checkpoint (${safeCheckpointId}) or describe a fresh direction.`
-                        : 'That answer is stale — the workflow has moved on. Describe a fresh direction to continue.',
-                    },
-                    updated_at: new Date().toISOString(),
+                  const refreshedState = syncCompanyStateFromStorage(managers, ctx.directory);
+                  const checkpoint = safeCheckpointId
+                    ? (managers.workspaceState.company.readCheckpoint?.(safeCheckpointId) ?? null)
+                    : null;
+                  const classified = refreshedState
+                    ? fromDeferredIntent(refreshedState, pendingWait.phase)
+                    : null;
+
+                  if (refreshedState && classified) {
+                    const recovery = deriveStaleAnswerRecovery(
+                      refreshedState,
+                      pendingWait,
+                      checkpoint
+                    );
+                    const prompt = buildCompanyResumePrompt(recovery);
+                    createResumePendingDecision({
+                      managers,
+                      delegationState,
+                      sessionId,
+                      companyState: refreshedState,
+                      classified,
+                      checkpointId: recovery.targetCheckpointId,
+                      prompt,
+                      goal: recovery.goal,
+                      currentStep: recovery.currentStep,
+                      recommendation: recovery.recommendation,
+                      requestText:
+                        refreshedState.visible_context?.deferred_request_text ??
+                        refreshedState.visible_context?.current_goal ??
+                        pendingContext?.requestText ??
+                        recovery.goal,
+                    });
+                  } else if (companyState) {
+                    managers.workspaceState.company.write({
+                      ...companyState,
+                      visible_context: {
+                        ...companyState.visible_context,
+                        status_summary:
+                          'That answer is stale. Describe a fresh direction to continue safely.',
+                      },
+                      updated_at: new Date().toISOString(),
+                    });
+                  }
+                  return;
+                }
+              }
+
+              if (
+                RETRY_COMPANY_REQUEST_REGEX.test(text) &&
+                companyState &&
+                activeDelegation === null &&
+                pendingContext === null &&
+                (pendingWait === undefined || pendingWait.status === 'stale')
+              ) {
+                const safeCheckpointId = getLatestSafeCheckpointId(ctx.directory) ?? undefined;
+                const checkpoint = safeCheckpointId
+                  ? (managers.workspaceState.company.readCheckpoint?.(safeCheckpointId) ?? null)
+                  : null;
+                const classified = fromDeferredIntent(companyState);
+
+                if (classified && safeCheckpointId) {
+                  const offer = deriveCompanyResumeOffer(companyState, checkpoint);
+                  const prompt = buildCompanyResumePrompt(offer);
+                  createResumePendingDecision({
+                    managers,
+                    delegationState,
+                    sessionId,
+                    companyState,
+                    classified,
+                    checkpointId: offer.targetCheckpointId,
+                    prompt,
+                    goal: offer.goal,
+                    currentStep: offer.currentStep,
+                    recommendation: offer.recommendation,
+                    requestText:
+                      companyState.visible_context?.deferred_request_text ??
+                      companyState.visible_context?.current_goal ??
+                      text,
                   });
                   return;
                 }
@@ -430,6 +624,26 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
                 if (REJECT_COMPANY_DECISION_REGEX.test(text)) {
                   resolveDecisionWaitInState(ctx.directory, pendingWait.id, text);
                   archiveDecisionWaitInState(ctx.directory, pendingWait.id);
+                  syncCompanyStateFromStorage(managers, ctx.directory);
+
+                  if (pendingContext.source === 'resume') {
+                    delegationState.clearPendingContext(sessionId);
+                    const refreshedState = managers.workspaceState.company.read();
+                    if (refreshedState) {
+                      managers.workspaceState.company.write({
+                        ...refreshedState,
+                        visible_context: {
+                          ...refreshedState.visible_context,
+                          status_summary:
+                            'The Company kept the workflow paused. Confirm a fresh direction before it continues.',
+                          pending_user_decision: undefined,
+                        },
+                        updated_at: new Date().toISOString(),
+                      });
+                    }
+                    return;
+                  }
+
                   const clarificationStallCount = (pendingContext.clarificationStallCount ?? 0) + 1;
                   const decision = applyAmbiguityPolicy(pendingContext.deferredIntent, {
                     priorDecision: 'rejected',
@@ -456,7 +670,77 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
                 ) {
                   resolveDecisionWaitInState(ctx.directory, pendingWait.id, text);
                   archiveDecisionWaitInState(ctx.directory, pendingWait.id);
+                  syncCompanyStateFromStorage(managers, ctx.directory);
                   delegationState.clearPendingContext(sessionId);
+
+                  if (pendingContext.approvalAction === 'continue-same-workflow') {
+                    const refreshedState = managers.workspaceState.company.read();
+                    if (refreshedState) {
+                      managers.workspaceState.company.write({
+                        ...refreshedState,
+                        visible_context: {
+                          ...refreshedState.visible_context,
+                          status_summary:
+                            'The Company accepted the checkpoint-bound approval and continued the same workflow.',
+                          pending_user_decision: undefined,
+                        },
+                        updated_at: new Date().toISOString(),
+                      });
+                    }
+                    return;
+                  }
+
+                  if (pendingContext.approvalAction === 'offer-resume') {
+                    const resumeCheckpointId =
+                      pendingContext.checkpointId ??
+                      getLatestSafeCheckpointId(ctx.directory) ??
+                      undefined;
+                    const checkpoint = resumeCheckpointId
+                      ? (managers.workspaceState.company.readCheckpoint?.(resumeCheckpointId) ??
+                        null)
+                      : null;
+                    const restoredState =
+                      checkpoint?.state ?? managers.workspaceState.company.read();
+                    const classified = restoredState
+                      ? fromDeferredIntent(restoredState, pendingContext.phase)
+                      : pendingContext.deferredIntent;
+
+                    if (restoredState && classified) {
+                      managers.workspaceState.company.write({
+                        ...restoredState,
+                        session_ids: mergeSessionId(restoredState.session_ids, sessionId),
+                        pending_decision_wait: undefined,
+                        last_checkpoint_id: resumeCheckpointId ?? restoredState.last_checkpoint_id,
+                        visible_context: {
+                          ...restoredState.visible_context,
+                          status_summary:
+                            'The Company resumed the saved workflow from the latest safe checkpoint.',
+                          pending_user_decision: undefined,
+                        },
+                        updated_at: new Date().toISOString(),
+                      });
+
+                      const result = orchestrator.delegate(classified);
+                      if (result) {
+                        const delegated = finalizeCompanyDelegation({
+                          managers,
+                          sessionId,
+                          requestText: pendingContext.requestText,
+                          classified,
+                          result,
+                          delegationState,
+                          workflowId: restoredState.workflow_id ?? pendingContext.workflowId,
+                          checkpointId: resumeCheckpointId,
+                        });
+                        log('[plugin-interface] delegated intent', {
+                          phase: delegated.phase,
+                          agent: delegated.agent.role,
+                          skillCount: delegated.skills.length,
+                        });
+                      }
+                    }
+                    return;
+                  }
 
                   const result = orchestrator.delegate(pendingContext.deferredIntent);
                   if (result) {
@@ -527,6 +811,7 @@ export function createPluginInterface(params: PluginInterfaceParams): Record<str
                     classified,
                     decision,
                     delegationState,
+                    kind: decision.action,
                   });
                 } else {
                   const result = orchestrator.delegate(classified);
