@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.7.0](https://github.com/nntoan/gstack-opencode/compare/v0.6.0...v0.7.0) (2026-04-11)
+
+
+### Features
+
+* **01-01:** add agent_surface schema and typing ([7d8e849](https://github.com/nntoan/gstack-opencode/commit/7d8e849f5646fa677eedd4f4675a0cf68fc8d253))
+* **01-01:** add company agent and registry wiring ([df11c04](https://github.com/nntoan/gstack-opencode/commit/df11c0451a556399f699c3574889eb6879d59d1d))
+* **01-02:** add company fallback chain defaults ([c57d600](https://github.com/nntoan/gstack-opencode/commit/c57d600b941845998e4ad0f95100dbca132446c9))
+* **01-02:** apply company overrides through runtime registry ([e2b3d4c](https://github.com/nntoan/gstack-opencode/commit/e2b3d4c46c88177a6037bf76eb52a18361387266))
+* **01-03:** preserve legacy-multi projection path ([dae4f8e](https://github.com/nntoan/gstack-opencode/commit/dae4f8e57f46938315148d5e579884e58e3dc64c))
+* **01-03:** project only company in company mode ([eef0c93](https://github.com/nntoan/gstack-opencode/commit/eef0c93cc6045131478faa3747b1e1ee4ff1eec1))
+* **02-01:** add company snapshot log and checkpoint storage ([ed8d9c9](https://github.com/nntoan/gstack-opencode/commit/ed8d9c97d9c41ffaf27c524fac214e6c9ef47496))
+* **02-01:** define company runtime artifact contracts ([e7da73d](https://github.com/nntoan/gstack-opencode/commit/e7da73d734c17924c00c1c5156046384ba01ef72))
+* **02-02:** add boulder to company migration logic ([6e1c22e](https://github.com/nntoan/gstack-opencode/commit/6e1c22e0d54e2260c3dba433544af886e40db3b8))
+* **02-02:** expose canonical company state through workspaceState ([a5d8803](https://github.com/nntoan/gstack-opencode/commit/a5d8803d59c69c3fb5fff0db6a2b1bcc4772f8b0))
+* **02-03:** initialize and report canonical company state ([18e3e48](https://github.com/nntoan/gstack-opencode/commit/18e3e48d4c8708bb4e903e4fbc2ef3b7a4b763b2))
+* **02-03:** switch continuity hooks to company state ([97daed9](https://github.com/nntoan/gstack-opencode/commit/97daed97daada1c10211c97ecea57f7c3c84d666))
+* **03-01:** add company prompt projection ([1362ef8](https://github.com/nntoan/gstack-opencode/commit/1362ef8a920279204de09ec923e689c66f3c8018))
+* **03-02:** extend company workflow state ([d34f098](https://github.com/nntoan/gstack-opencode/commit/d34f098b39b2efa3203449ad6419ec39ae461999))
+* **03-03:** add company ambiguity policy ([065826c](https://github.com/nntoan/gstack-opencode/commit/065826c5eb8acadd9f4c373da331b27e5f8839ce))
+* **03-04:** wire company orchestration runtime ([10396f8](https://github.com/nntoan/gstack-opencode/commit/10396f8b8df781dfe3020248e5a7c57298e3d1ac))
+* **03-05:** add company recovery and trace hooks ([95fa5cb](https://github.com/nntoan/gstack-opencode/commit/95fa5cbc2802ad25c79fdeb0ca1838a479c16943))
+* **04-01:** extend decision-wait contract for stale and replay-safe lifecycle ([150544d](https://github.com/nntoan/gstack-opencode/commit/150544d874d65ca301c8663011cea87d8cdd680d))
+* **04-01:** persist stale and replay-safe decision helpers ([1546161](https://github.com/nntoan/gstack-opencode/commit/1546161e115b0daa297d10550578790bd6d1c5f6))
+* **04-02:** add pre-classification stale and replay gate ([5b7f154](https://github.com/nntoan/gstack-opencode/commit/5b7f1548246a22d951930c83b582311063e97b4b))
+* **04-02:** preserve deterministic retry ownership through stale gating ([7511bdf](https://github.com/nntoan/gstack-opencode/commit/7511bdf0304916e4dfaa5fcdb47ac2ee85646c41))
+* **04-03:** add company blocker prompt builder ([d1635d5](https://github.com/nntoan/gstack-opencode/commit/d1635d55ec36e9963b62430659d2fa3a12b83f51))
+* **04-03:** bind Company blocker prompts to fresh checkpoints ([c895dae](https://github.com/nntoan/gstack-opencode/commit/c895dae6a5653bdea8da0c970c2e791f63d9118c))
+* **04-04:** add canonical Company resume helpers ([d209df4](https://github.com/nntoan/gstack-opencode/commit/d209df4a8cf3bce615da335324ef21b0c8d742e5))
+* **04-04:** restore checkpoint-backed Company resume flow ([2546380](https://github.com/nntoan/gstack-opencode/commit/2546380b3f32dc8d0f16a2a6e5bcd14a8194a2f9))
+* **04-05:** project Company continuity guidance through hooks ([5d1aa95](https://github.com/nntoan/gstack-opencode/commit/5d1aa954e77ca7a0b1e56d220ef91caf2dbd6461))
+* **cli:** add new subcommand memoir:refresh ([ef41a78](https://github.com/nntoan/gstack-opencode/commit/ef41a78db6a14c97369572e4ace8743bb0a7442c))
+
 ## [0.6.0](https://github.com/nntoan/gstack-opencode/compare/v0.5.0...v0.6.0) (2026-04-06)
 
 
