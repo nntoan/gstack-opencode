@@ -11,6 +11,7 @@ export type {
   DecisionWaitStatus,
   DeferredClassifiedIntent,
 } from './types.ts';
+export type { CompanyResumeOffer } from './company-resume.ts';
 export { COMPANY_ARTIFACT_OWNERSHIP } from './types.ts';
 export {
   appendCompanyLogEntry,
@@ -33,4 +34,5 @@ export {
   createDecisionWait,
   resolveDecisionWait,
 } from './company-decision-wait.ts';
+export { deriveCompanyResumeOffer, deriveStaleAnswerRecovery } from './company-resume.ts';
 export { createCompanyMigrationLogEntry, migrateBoulderStateToCompanyState } from './migration.ts';
